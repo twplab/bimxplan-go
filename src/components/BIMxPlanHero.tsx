@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, Building, Settings, FileText, Users, Zap, Shield } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { Link } from "react-router-dom";
 const logoImage = "/lovable-uploads/b3298753-472d-4926-bba6-5c04d5980343.png";
 
 export function BIMxPlanHero() {
@@ -22,9 +23,9 @@ export function BIMxPlanHero() {
           </div>
           <div className="flex items-center space-x-4">
             <nav className="hidden md:flex space-x-6">
-              <a href="#about" className="text-muted-foreground hover:text-foreground transition-colors">About</a>
-              <a href="#contact" className="text-muted-foreground hover:text-foreground transition-colors">Contact</a>
-              <a href="#terms" className="text-muted-foreground hover:text-foreground transition-colors">Terms</a>
+              <Link to="/about" className="text-muted-foreground hover:text-foreground transition-colors">About</Link>
+              <Link to="/contact" className="text-muted-foreground hover:text-foreground transition-colors">Contact</Link>
+              <Link to="/terms" className="text-muted-foreground hover:text-foreground transition-colors">Terms</Link>
             </nav>
             <ThemeToggle />
           </div>
