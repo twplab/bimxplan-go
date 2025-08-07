@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/AppSidebar"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
-import logoImage from "@/assets/bimxplan-logo.png"
+const logoImage = "/lovable-uploads/b3298753-472d-4926-bba6-5c04d5980343.png";
 
 interface Project {
   id: string
@@ -128,11 +128,13 @@ const Dashboard = () => {
                 <div className="flex items-center space-x-4">
                   <SidebarTrigger />
                   <div className="flex items-center">
-                    <img 
-                      src={logoImage} 
-                      alt="BIMxPlan Go" 
-                      className="h-16 w-16 md:h-12 md:w-12 object-contain bg-transparent" 
-                    />
+                    <a href="/" className="flex items-center">
+                      <img 
+                        src={logoImage} 
+                        alt="BIMxPlan Go" 
+                        className="h-20 w-auto md:h-16 md:w-auto object-contain bg-transparent hover:opacity-90 transition-opacity" 
+                      />
+                    </a>
                   </div>
                 </div>
                 <div className="flex items-center space-x-4">
