@@ -189,12 +189,4 @@ const ProjectEditorContent = () => {
   )
 }
 
-const ProjectEditor = () => {
-  return (
-    <AuthProvider>
-      <ProjectEditorContent />
-    </AuthProvider>
-  )
-}
-
-export default ProjectEditor
+export default ProjectEditorContent
