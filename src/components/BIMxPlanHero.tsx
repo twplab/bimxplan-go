@@ -255,9 +255,9 @@ export function BIMxPlanHero() {
               </a>
             </div>
             <nav className="flex space-x-6">
-              <a href="#about" className="text-muted-foreground hover:text-foreground transition-colors">About</a>
-              <a href="#contact" className="text-muted-foreground hover:text-foreground transition-colors">Contact</a>
-              <a href="#terms" className="text-muted-foreground hover:text-foreground transition-colors">Terms</a>
+              <a href="/about" className="text-muted-foreground hover:text-foreground transition-colors">About</a>
+              <a href="/contact" className="text-muted-foreground hover:text-foreground transition-colors">Contact</a>
+              <a href="/terms" className="text-muted-foreground hover:text-foreground transition-colors">Terms</a>
             </nav>
           </div>
         </div>

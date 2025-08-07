@@ -91,8 +91,12 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <Building2 className="h-8 w-8 text-primary" />
+          <div className="flex items-center justify-center space-x-3 mb-4">
+            <img 
+              src="/lovable-uploads/b3298753-472d-4926-bba6-5c04d5980343.png" 
+              alt="BIMxPlan Go" 
+              className="h-8 w-8 object-contain bg-transparent" 
+            />
             <span className="text-2xl font-bold">BIMxPlan Go</span>
           </div>
           <CardTitle>Welcome</CardTitle>
