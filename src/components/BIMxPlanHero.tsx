@@ -38,10 +38,15 @@ export function BIMxPlanHero() {
               <p className="text-xl text-muted-foreground leading-relaxed">
                 Quickly generate smart BIM Execution Plans tailored to your project.
               </p>
-              <Button size="lg" className="text-lg px-8 py-6 bg-primary hover:bg-primary/90">
-                Generate Your Plan
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
+              <div className="flex space-x-4">
+                <Button size="lg" className="text-lg px-8 py-6 bg-primary hover:bg-primary/90" onClick={() => window.location.href = '/auth'}>
+                  Get Started
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+                <Button size="lg" variant="outline" className="text-lg px-8 py-6" onClick={() => window.location.href = '/bep-form'}>
+                  Try Demo
+                </Button>
+              </div>
             </div>
             <div className="relative">
               <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl p-8 border border-border/20">
@@ -221,8 +226,8 @@ export function BIMxPlanHero() {
           <h2 className="text-4xl font-bold text-foreground mb-6">
             All the essentials to kickstart your BIM execution—without the complexity.
           </h2>
-          <Button size="lg" className="text-lg px-8 py-6 bg-primary hover:bg-primary/90">
-            Try the Generator
+          <Button size="lg" className="text-lg px-8 py-6 bg-primary hover:bg-primary/90" onClick={() => window.location.href = '/auth'}>
+            Start Building Your BEP
             <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
         </div>

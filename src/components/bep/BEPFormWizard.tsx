@@ -12,12 +12,15 @@ import { CollaborationCDEForm } from "./forms/CollaborationCDEForm"
 import { GeolocationForm } from "./forms/GeolocationForm"
 import { ModelCheckingForm } from "./forms/ModelCheckingForm"
 import { OutputsDeliverablesForm } from "./forms/OutputsDeliverablesForm"
-import { BEPPreview } from "./BEPPreview"
+import { EnhancedBEPPreview } from "./EnhancedBEPPreview"
 import { ProjectData } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 
 interface BEPFormWizardProps {
   onClose: () => void
+  initialData?: any
+  onUpdate?: (data: any) => void
+  projectId?: string
 }
 
 const STEPS = [
@@ -30,12 +33,12 @@ const STEPS = [
   { id: 'geolocation', title: 'Geolocation', component: GeolocationForm },
   { id: 'checking', title: 'Model Checking', component: ModelCheckingForm },
   { id: 'outputs', title: 'Outputs & Deliverables', component: OutputsDeliverablesForm },
-  { id: 'preview', title: 'Preview & Export', component: BEPPreview },
+  { id: 'preview', title: 'Preview & Export', component: EnhancedBEPPreview },
 ]
 
-export function BEPFormWizard({ onClose }: BEPFormWizardProps) {
+export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }: BEPFormWizardProps) {
   const [currentStep, setCurrentStep] = useState(0)
-  const [projectData, setProjectData] = useState<Partial<ProjectData>>({})
+  const [projectData, setProjectData] = useState<Partial<ProjectData>>(initialData)
 
   const progress = ((currentStep + 1) / STEPS.length) * 100
 
@@ -53,14 +56,22 @@ export function BEPFormWizard({ onClose }: BEPFormWizardProps) {
 
   const handleStepUpdate = (stepData: any) => {
     const stepKey = STEPS[currentStep].id
-    setProjectData(prev => ({
-      ...prev,
+    const updatedData = {
+      ...projectData,
       [stepKey]: stepData
-    }))
+    }
+    setProjectData(updatedData)
+    
+    // Auto-save if we have an update handler
+    if (onUpdate) {
+      onUpdate(updatedData)
+    }
   }
 
   const handleSave = async () => {
-    // Save to database logic
+    if (onUpdate) {
+      onUpdate(projectData)
+    }
     toast({
       title: "Project Saved",
       description: "Your BIM execution plan has been saved successfully.",
