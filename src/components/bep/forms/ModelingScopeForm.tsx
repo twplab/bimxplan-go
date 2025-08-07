@@ -18,7 +18,9 @@ const modelingScopeSchema = z.object({
     lod_level: z.string().min(1, "LOD level is required"),
     description: z.string(),
   })),
-  exceptions: z.array(z.string()),
+  exceptions: z.array(z.object({
+    value: z.string()
+  })),
   units: z.string().min(1, "Units are required"),
   levels_grids_strategy: z.string().min(1, "Strategy is required"),
 })
@@ -44,7 +46,7 @@ export function ModelingScopeForm({ data, onUpdate }: ModelingScopeFormProps) {
         { discipline: "Structural", lod_level: "", description: "" },
         { discipline: "MEP", lod_level: "", description: "" },
       ],
-      exceptions: data?.exceptions || [],
+      exceptions: data?.exceptions ? data.exceptions.map(ex => ({ value: ex })) : [],
       units: data?.units || "",
       levels_grids_strategy: data?.levels_grids_strategy || "",
     },
@@ -256,7 +258,7 @@ export function ModelingScopeForm({ data, onUpdate }: ModelingScopeFormProps) {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Modeling Exceptions</CardTitle>
-              <Button type="button" variant="outline" size="sm" onClick={() => appendException("")}>
+              <Button type="button" variant="outline" size="sm" onClick={() => appendException({ value: "" })}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Exception
               </Button>
@@ -273,7 +275,7 @@ export function ModelingScopeForm({ data, onUpdate }: ModelingScopeFormProps) {
                   <div key={field.id} className="flex items-center space-x-2">
                     <FormField
                       control={form.control}
-                      name={`exceptions.${index}`}
+                      name={`exceptions.${index}.value`}
                       render={({ field }) => (
                         <FormItem className="flex-1">
                           <FormControl>

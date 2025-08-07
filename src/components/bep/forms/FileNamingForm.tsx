@@ -15,7 +15,9 @@ const fileNamingSchema = z.object({
   prefix_format: z.string(),
   discipline_codes: z.string(),
   versioning_format: z.string(),
-  examples: z.array(z.string()),
+  examples: z.array(z.object({
+    value: z.string()
+  })),
 })
 
 type FileNamingFormData = z.infer<typeof fileNamingSchema>
@@ -33,10 +35,10 @@ export function FileNamingForm({ data, onUpdate }: FileNamingFormProps) {
       prefix_format: data?.prefix_format || "[Project]_[Discipline]_[Building/Zone]",
       discipline_codes: data?.discipline_codes || "AR = Architecture, ST = Structural, ME = MEP, CV = Civil",
       versioning_format: data?.versioning_format || "v01, v02, v03...",
-      examples: data?.examples || [
-        "PROJ_AR_MainBuilding_v01.rvt",
-        "PROJ_ST_Tower_v02.rvt", 
-        "PROJ_ME_Basement_v01.rvt"
+      examples: data?.examples ? data.examples.map(ex => ({ value: ex })) : [
+        { value: "PROJ_AR_MainBuilding_v01.rvt" },
+        { value: "PROJ_ST_Tower_v02.rvt" }, 
+        { value: "PROJ_ME_Basement_v01.rvt" }
       ],
     },
   })
@@ -161,7 +163,7 @@ export function FileNamingForm({ data, onUpdate }: FileNamingFormProps) {
                       type="button" 
                       variant="outline" 
                       size="sm" 
-                      onClick={() => appendExample("")}
+                      onClick={() => appendExample({ value: "" })}
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Add Example
@@ -173,7 +175,7 @@ export function FileNamingForm({ data, onUpdate }: FileNamingFormProps) {
                       <div key={field.id} className="flex items-center space-x-2">
                         <FormField
                           control={form.control}
-                          name={`examples.${index}`}
+                          name={`examples.${index}.value`}
                           render={({ field }) => (
                             <FormItem className="flex-1">
                               <FormControl>
