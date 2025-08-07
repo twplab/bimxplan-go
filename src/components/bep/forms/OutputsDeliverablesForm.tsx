@@ -134,17 +134,18 @@ export function OutputsDeliverablesForm({ data, onUpdate }: OutputsDeliverablesF
                 Select the file formats that will be used for deliverables throughout the project
               </FormDescription>
               
-              <div className="grid grid-cols-2 gap-3">
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 {FILE_FORMATS.map((format) => (
-                  <div key={format} className="flex items-center space-x-2">
+                  <div key={format} className="flex items-center space-x-3 py-1">
                     <Checkbox
                       id={format}
                       checked={formatStandards?.includes(format) || false}
                       onCheckedChange={() => toggleFormat(format)}
+                      className="mt-0.5"
                     />
                     <label 
                       htmlFor={format}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      className="text-sm font-medium leading-relaxed peer-disabled:cursor-not-allowed peer-disabled:opacity-70 min-h-[44px] flex items-center"
                     >
                       {format}
                     </label>
@@ -158,12 +159,13 @@ export function OutputsDeliverablesForm({ data, onUpdate }: OutputsDeliverablesF
         {/* Deliverables by Phase */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <CardTitle className="text-lg">Deliverables by Project Phase</CardTitle>
               <Button 
                 type="button" 
                 variant="outline" 
                 size="sm" 
+                className="w-full sm:w-auto"
                 onClick={() => appendPhase({ phase: "", deliverables: [], formats: [], responsibility: "" })}
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -232,17 +234,18 @@ export function OutputsDeliverablesForm({ data, onUpdate }: OutputsDeliverablesF
 
                     <div>
                       <FormLabel className="text-sm">Deliverable Types</FormLabel>
-                      <div className="grid grid-cols-2 gap-2 mt-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                         {DELIVERABLE_TYPES.map((deliverable) => (
-                          <div key={deliverable} className="flex items-center space-x-2">
+                          <div key={deliverable} className="flex items-center space-x-3 py-1">
                             <Checkbox
                               id={`${phaseIndex}-${deliverable}`}
                               checked={form.watch(`deliverables_by_phase.${phaseIndex}.deliverables`)?.includes(deliverable) || false}
                               onCheckedChange={() => toggleDeliverable(phaseIndex, deliverable)}
+                              className="mt-0.5"
                             />
                             <label 
                               htmlFor={`${phaseIndex}-${deliverable}`}
-                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                              className="text-sm font-medium leading-relaxed peer-disabled:cursor-not-allowed peer-disabled:opacity-70 min-h-[44px] flex items-center"
                             >
                               {deliverable}
                             </label>
@@ -253,17 +256,18 @@ export function OutputsDeliverablesForm({ data, onUpdate }: OutputsDeliverablesF
 
                     <div>
                       <FormLabel className="text-sm">Required Formats</FormLabel>
-                      <div className="grid grid-cols-2 gap-2 mt-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                         {FILE_FORMATS.map((format) => (
-                          <div key={format} className="flex items-center space-x-2">
+                          <div key={format} className="flex items-center space-x-3 py-1">
                             <Checkbox
                               id={`${phaseIndex}-format-${format}`}
                               checked={form.watch(`deliverables_by_phase.${phaseIndex}.formats`)?.includes(format) || false}
                               onCheckedChange={() => togglePhaseFormat(phaseIndex, format)}
+                              className="mt-0.5"
                             />
                             <label 
                               htmlFor={`${phaseIndex}-format-${format}`}
-                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                              className="text-sm font-medium leading-relaxed peer-disabled:cursor-not-allowed peer-disabled:opacity-70 min-h-[44px] flex items-center"
                             >
                               {format}
                             </label>
@@ -281,7 +285,7 @@ export function OutputsDeliverablesForm({ data, onUpdate }: OutputsDeliverablesF
         {/* Milestone Schedule */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center space-x-2">
                 <Calendar className="h-5 w-5 text-accent" />
                 <CardTitle className="text-lg">Milestone Schedule</CardTitle>
@@ -290,6 +294,7 @@ export function OutputsDeliverablesForm({ data, onUpdate }: OutputsDeliverablesF
                 type="button" 
                 variant="outline" 
                 size="sm" 
+                className="w-full sm:w-auto"
                 onClick={() => appendSchedule({ milestone: "", deadline: "", deliverables: [] })}
               >
                 <Plus className="h-4 w-4 mr-2" />

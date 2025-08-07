@@ -155,14 +155,14 @@ const Dashboard = () => {
           {/* Main Content */}
           <main className="flex-1 px-4 py-8">
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">Your Projects</h2>
-            <p className="text-muted-foreground">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div className="flex-1">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Your Projects</h2>
+            <p className="text-muted-foreground text-sm sm:text-base">
               Manage your BIM Execution Plans and collaborate with your team
             </p>
           </div>
-          <Button onClick={createNewProject} size="lg">
+          <Button onClick={createNewProject} size="lg" className="w-full sm:w-auto">
             <Plus className="h-5 w-5 mr-2" />
             New Project
           </Button>
@@ -184,52 +184,53 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {projects.map((project) => (
-              <Card key={project.id} className="hover:shadow-lg transition-shadow cursor-pointer">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg line-clamp-2">{project.name}</CardTitle>
+              <Card key={project.id} className="hover:shadow-lg transition-shadow cursor-pointer overflow-hidden">
+                <CardHeader className="pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-base sm:text-lg line-clamp-2 leading-tight">{project.name}</CardTitle>
                       {project.location && (
-                        <CardDescription className="mt-1">{project.location}</CardDescription>
+                        <CardDescription className="mt-1 text-sm truncate">{project.location}</CardDescription>
                       )}
                     </div>
-                    <Badge className={getStatusColor(project.status)}>
+                    <Badge className={`${getStatusColor(project.status)} text-xs whitespace-nowrap`}>
                       {project.status.replace('_', ' ')}
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 text-sm text-muted-foreground">
+                <CardContent className="pt-0">
+                  <div className="space-y-2.5 text-sm text-muted-foreground">
                     {project.client_name && (
-                      <div className="flex items-center">
-                        <Users className="h-4 w-4 mr-2" />
-                        {project.client_name}
+                      <div className="flex items-center min-h-[20px]">
+                        <Users className="h-4 w-4 mr-2 shrink-0" />
+                        <span className="truncate">{project.client_name}</span>
                       </div>
                     )}
-                    <div className="flex items-center">
-                      <Calendar className="h-4 w-4 mr-2" />
-                      {new Date(project.updated_at).toLocaleDateString()}
+                    <div className="flex items-center min-h-[20px]">
+                      <Calendar className="h-4 w-4 mr-2 shrink-0" />
+                      <span className="truncate">{new Date(project.updated_at).toLocaleDateString()}</span>
                     </div>
-                    <div className="flex items-center">
-                      <FileText className="h-4 w-4 mr-2" />
-                      {project.project_type.replace('_', ' ')}
+                    <div className="flex items-center min-h-[20px]">
+                      <FileText className="h-4 w-4 mr-2 shrink-0" />
+                      <span className="truncate">{project.project_type.replace('_', ' ')}</span>
                     </div>
                   </div>
                   <Separator className="my-4" />
-                  <div className="flex space-x-2">
+                  <div className="flex gap-2">
                     <Button 
                       size="sm" 
-                      className="flex-1"
+                      className="flex-1 min-w-0"
                       onClick={() => navigate(`/project/${project.id}`)}
                     >
-                      <FileText className="h-4 w-4 mr-2" />
-                      Edit
+                      <FileText className="h-4 w-4 mr-1.5 shrink-0" />
+                      <span className="truncate">Edit</span>
                     </Button>
                     <Button 
                       size="sm" 
                       variant="outline"
+                      className="shrink-0"
                       onClick={() => navigate(`/project/${project.id}/settings`)}
                     >
                       <Settings className="h-4 w-4" />

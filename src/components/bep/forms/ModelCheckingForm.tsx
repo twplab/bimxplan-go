@@ -198,43 +198,43 @@ export function ModelCheckingForm({ data, onUpdate }: ModelCheckingFormProps) {
             <CardTitle className="text-lg">Typical Coordination Workflow</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-4 gap-4 text-center">
-              <div className="space-y-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 text-center">
+              <div className="space-y-3 p-3 sm:p-0">
                 <div className="h-12 w-12 bg-primary/20 rounded-lg flex items-center justify-center mx-auto">
                   <span className="text-sm font-bold text-primary">1</span>
                 </div>
-                <h4 className="font-medium text-sm">Model Upload</h4>
-                <p className="text-xs text-muted-foreground">
+                <h4 className="font-medium text-sm leading-tight">Model Upload</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed px-1">
                   Teams upload latest models to CDE
                 </p>
               </div>
               
-              <div className="space-y-2">
+              <div className="space-y-3 p-3 sm:p-0">
                 <div className="h-12 w-12 bg-accent/20 rounded-lg flex items-center justify-center mx-auto">
                   <span className="text-sm font-bold text-accent">2</span>
                 </div>
-                <h4 className="font-medium text-sm">Clash Detection</h4>
-                <p className="text-xs text-muted-foreground">
+                <h4 className="font-medium text-sm leading-tight">Clash Detection</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed px-1">
                   Run automated clash detection
                 </p>
               </div>
               
-              <div className="space-y-2">
+              <div className="space-y-3 p-3 sm:p-0">
                 <div className="h-12 w-12 bg-primary/20 rounded-lg flex items-center justify-center mx-auto">
                   <span className="text-sm font-bold text-primary">3</span>
                 </div>
-                <h4 className="font-medium text-sm">Issue Resolution</h4>
-                <p className="text-xs text-muted-foreground">
+                <h4 className="font-medium text-sm leading-tight">Issue Resolution</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed px-1">
                   Coordinate and resolve conflicts
                 </p>
               </div>
               
-              <div className="space-y-2">
+              <div className="space-y-3 p-3 sm:p-0">
                 <div className="h-12 w-12 bg-accent/20 rounded-lg flex items-center justify-center mx-auto">
                   <span className="text-sm font-bold text-accent">4</span>
                 </div>
-                <h4 className="font-medium text-sm">Verification</h4>
-                <p className="text-xs text-muted-foreground">
+                <h4 className="font-medium text-sm leading-tight">Verification</h4>
+                <p className="text-xs text-muted-foreground leading-relaxed px-1">
                   Verify fixes and update models
                 </p>
               </div>

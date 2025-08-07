@@ -322,14 +322,15 @@ export function EnhancedBEPPreview({ data, projectData }: BEPPreviewProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          Preview & Export
-          <div className="flex space-x-2">
+        <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <span>Preview & Export</span>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <Dialog open={showPreview} onOpenChange={setShowPreview}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="w-full sm:w-auto">
                   <Eye className="h-4 w-4 mr-2" />
-                  Preview
+                  <span className="hidden sm:inline">Preview</span>
+                  <span className="sm:hidden">Preview Document</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-4xl max-h-[80vh]">
@@ -345,14 +346,16 @@ export function EnhancedBEPPreview({ data, projectData }: BEPPreviewProps) {
               </DialogContent>
             </Dialog>
             
-            <Button variant="outline" size="sm" onClick={handleExportMarkdown}>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleExportMarkdown}>
               <FileText className="h-4 w-4 mr-2" />
-              Markdown
+              <span className="hidden sm:inline">Markdown</span>
+              <span className="sm:hidden">MD</span>
             </Button>
             
-            <Button size="sm" onClick={generatePDF}>
+            <Button size="sm" className="w-full sm:w-auto" onClick={generatePDF}>
               <Download className="h-4 w-4 mr-2" />
-              Export PDF
+              <span className="hidden sm:inline">Export PDF</span>
+              <span className="sm:hidden">PDF</span>
             </Button>
           </div>
         </CardTitle>
@@ -366,12 +369,12 @@ export function EnhancedBEPPreview({ data, projectData }: BEPPreviewProps) {
             Review your BIM Execution Plan and export it in your preferred format.
           </p>
           
-          <div className="flex justify-center space-x-4">
-            <Button variant="outline" onClick={() => setShowPreview(true)}>
+          <div className="flex flex-col sm:flex-row justify-center gap-3 sm:space-x-4 sm:space-y-0">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowPreview(true)}>
               <Eye className="h-4 w-4 mr-2" />
               Preview Document
             </Button>
-            <Button onClick={generatePDF}>
+            <Button className="w-full sm:w-auto" onClick={generatePDF}>
               <Download className="h-4 w-4 mr-2" />
               Export PDF
             </Button>
