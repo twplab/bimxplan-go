@@ -78,7 +78,7 @@ export function ModelingScopeForm({ data, onUpdate }: ModelingScopeFormProps) {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="general_lod"
@@ -166,8 +166,8 @@ export function ModelingScopeForm({ data, onUpdate }: ModelingScopeFormProps) {
               {lodFields.map((field, index) => (
                 <Card key={field.id} className="border-2 border-dashed border-muted">
                   <CardContent className="pt-4">
-                    <div className="grid grid-cols-12 gap-4 items-end">
-                      <div className="col-span-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+                      <div className="col-span-1 sm:col-span-1 lg:col-span-3">
                         <FormField
                           control={form.control}
                           name={`discipline_lods.${index}.discipline`}
@@ -193,7 +193,7 @@ export function ModelingScopeForm({ data, onUpdate }: ModelingScopeFormProps) {
                           )}
                         />
                       </div>
-                      <div className="col-span-2">
+                      <div className="col-span-1 sm:col-span-1 lg:col-span-2">
                         <FormField
                           control={form.control}
                           name={`discipline_lods.${index}.lod_level`}
@@ -219,7 +219,7 @@ export function ModelingScopeForm({ data, onUpdate }: ModelingScopeFormProps) {
                           )}
                         />
                       </div>
-                      <div className="col-span-6">
+                      <div className="col-span-1 sm:col-span-2 lg:col-span-6">
                         <FormField
                           control={form.control}
                           name={`discipline_lods.${index}.description`}
@@ -234,7 +234,7 @@ export function ModelingScopeForm({ data, onUpdate }: ModelingScopeFormProps) {
                           )}
                         />
                       </div>
-                      <div className="col-span-1">
+                      <div className="col-span-1 sm:col-span-1 lg:col-span-1">
                         <Button
                           type="button"
                           variant="outline"

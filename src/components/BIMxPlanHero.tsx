@@ -36,7 +36,7 @@ export function BIMxPlanHero() {
       <section className="py-20 px-6">
         <div className="container mx-auto max-w-6xl">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-8">
+            <div className="space-y-8 text-center lg:text-left">
               <h1 className="text-5xl lg:text-6xl font-bold text-foreground leading-tight">
                 Forge your BIM path —{" "}
                 <span className="text-transparent bg-gradient-to-r from-primary to-accent bg-clip-text">

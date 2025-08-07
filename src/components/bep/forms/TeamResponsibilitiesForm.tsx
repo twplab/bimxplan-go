@@ -96,7 +96,7 @@ export function TeamResponsibilitiesForm({ data, onUpdate }: TeamResponsibilitie
                     )}
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name={`firms.${index}.name`}
@@ -137,7 +137,7 @@ export function TeamResponsibilitiesForm({ data, onUpdate }: TeamResponsibilitie
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name={`firms.${index}.bim_lead`}

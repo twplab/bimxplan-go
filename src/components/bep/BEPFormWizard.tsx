@@ -118,40 +118,48 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
         </Card>
 
         {/* Navigation */}
-        <div className="flex justify-between items-center">
-          <Button 
-            variant="outline" 
-            onClick={handlePrevious} 
-            disabled={currentStep === 0}
-          >
-            <ChevronLeft className="h-4 w-4 mr-2" />
-            Previous
-          </Button>
-
-          <div className="flex space-x-2">
-            <Button variant="outline" onClick={handleSave}>
-              <Save className="h-4 w-4 mr-2" />
-              Save Progress
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pb-6">
+          <div className="flex justify-between w-full sm:w-auto order-2 sm:order-1">
+            <Button 
+              variant="outline" 
+              onClick={handlePrevious} 
+              disabled={currentStep === 0}
+              className="flex-1 sm:flex-none"
+            >
+              <ChevronLeft className="h-4 w-4 mr-2" />
+              Previous
             </Button>
           </div>
 
-          {currentStep < STEPS.length - 1 ? (
-            <Button onClick={handleNext}>
-              Next
-              <ChevronRight className="h-4 w-4 ml-2" />
+          <div className="flex space-x-2 order-3 sm:order-2">
+            <Button variant="outline" onClick={handleSave}>
+              <Save className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Save Progress</span>
+              <span className="sm:hidden">Save</span>
             </Button>
-          ) : (
-            <div className="flex space-x-2">
-              <Button variant="outline">
-                <Download className="h-4 w-4 mr-2" />
-                Export PDF
+          </div>
+
+          <div className="flex justify-end w-full sm:w-auto order-1 sm:order-3">
+            {currentStep < STEPS.length - 1 ? (
+              <Button onClick={handleNext} className="flex-1 sm:flex-none">
+                Next
+                <ChevronRight className="h-4 w-4 ml-2" />
               </Button>
-              <Button>
-                <FileText className="h-4 w-4 mr-2" />
-                Export Markdown
-              </Button>
-            </div>
-          )}
+            ) : (
+              <div className="flex space-x-2 w-full sm:w-auto">
+                <Button variant="outline" className="flex-1 sm:flex-none">
+                  <Download className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Export PDF</span>
+                  <span className="sm:hidden">PDF</span>
+                </Button>
+                <Button className="flex-1 sm:flex-none">
+                  <FileText className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Export Markdown</span>
+                  <span className="sm:hidden">MD</span>
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
