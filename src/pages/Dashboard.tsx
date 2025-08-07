@@ -6,8 +6,12 @@ import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { supabase } from "@/integrations/supabase/client"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, FileText, Users, Calendar, Settings, LogOut, Building2 } from "lucide-react"
+import { Plus, FileText, Users, Calendar, Settings, LogOut } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { AppSidebar } from "@/components/AppSidebar"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
+import logoImage from "@/assets/bimxplan-logo.png"
 
 interface Project {
   id: string
@@ -112,29 +116,38 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      {/* Header */}
-      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Building2 className="h-8 w-8 text-primary" />
-              <h1 className="text-2xl font-bold">BIMxPlan Go</h1>
+    <SidebarProvider>
+      <div className="min-h-screen w-full flex bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+        <AppSidebar />
+        
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="px-4 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <SidebarTrigger />
+                  <div className="flex items-center space-x-3">
+                    <img src={logoImage} alt="BIMxPlan Go" className="h-8 w-8" />
+                    <h1 className="text-2xl font-bold">BIMxPlan Go</h1>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <span className="text-sm text-muted-foreground">
+                    Welcome, {user?.email}
+                  </span>
+                  <ThemeToggle />
+                  <Button variant="outline" size="sm" onClick={handleSignOut}>
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-muted-foreground">
-                Welcome, {user?.email}
-              </span>
-              <Button variant="outline" size="sm" onClick={handleSignOut}>
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+          </header>
 
-      <div className="container mx-auto px-4 py-8">
+          {/* Main Content */}
+          <main className="flex-1 px-4 py-8">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -221,8 +234,10 @@ const Dashboard = () => {
             ))}
           </div>
         )}
+          </main>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   )
 }
 

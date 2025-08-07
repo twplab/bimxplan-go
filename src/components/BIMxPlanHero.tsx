@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, Building, Settings, FileText, Users, Zap, Shield } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import logoImage from "@/assets/bimxplan-logo.png";
 
 export function BIMxPlanHero() {
   return (
@@ -10,7 +11,7 @@ export function BIMxPlanHero() {
       <header className="border-b border-border/10">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="h-8 w-8 bg-gradient-to-r from-primary to-accent rounded"></div>
+            <img src={logoImage} alt="BIMxPlan Go" className="h-8 w-8" />
             <span className="text-xl font-bold text-foreground">BIMxPlan Go</span>
           </div>
           <div className="flex items-center space-x-4">
@@ -238,7 +239,7 @@ export function BIMxPlanHero() {
         <div className="container mx-auto max-w-6xl">
           <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
             <div className="flex items-center space-x-3">
-              <div className="h-6 w-6 bg-gradient-to-r from-primary to-accent rounded"></div>
+              <img src={logoImage} alt="BIMxPlan Go" className="h-6 w-6" />
               <span className="font-semibold text-foreground">BIMxPlan Go</span>
             </div>
             <nav className="flex space-x-6">
