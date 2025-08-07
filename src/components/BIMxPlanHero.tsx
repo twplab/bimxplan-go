@@ -11,12 +11,13 @@ export function BIMxPlanHero() {
       <header className="border-b border-border/10">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center">
-            <a href="/" className="flex items-center">
+            <a href="/" className="flex items-center space-x-3 hover:opacity-90 transition-opacity">
               <img 
                 src={logoImage} 
                 alt="BIMxPlan Go" 
-                className="h-20 w-auto md:h-16 md:w-auto object-contain bg-transparent hover:opacity-90 transition-opacity" 
+                className="h-12 w-12 md:h-10 md:w-10 object-contain bg-transparent" 
               />
+              <span className="text-xl font-bold text-foreground">BIMxPlan Go</span>
             </a>
           </div>
           <div className="flex items-center space-x-4">
@@ -244,11 +245,14 @@ export function BIMxPlanHero() {
         <div className="container mx-auto max-w-6xl">
           <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
             <div className="flex items-center">
-              <img 
-                src={logoImage} 
-                alt="BIMxPlan Go" 
-                className="h-12 w-auto object-contain bg-transparent" 
-              />
+              <a href="/" className="flex items-center space-x-2">
+                <img 
+                  src={logoImage} 
+                  alt="BIMxPlan Go" 
+                  className="h-8 w-8 object-contain bg-transparent" 
+                />
+                <span className="font-semibold text-foreground">BIMxPlan Go</span>
+              </a>
             </div>
             <nav className="flex space-x-6">
               <a href="#about" className="text-muted-foreground hover:text-foreground transition-colors">About</a>

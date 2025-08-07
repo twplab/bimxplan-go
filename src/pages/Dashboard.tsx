@@ -128,12 +128,13 @@ const Dashboard = () => {
                 <div className="flex items-center space-x-4">
                   <SidebarTrigger />
                   <div className="flex items-center">
-                    <a href="/" className="flex items-center">
+                    <a href="/" className="flex items-center space-x-3 hover:opacity-90 transition-opacity">
                       <img 
                         src={logoImage} 
                         alt="BIMxPlan Go" 
-                        className="h-20 w-auto md:h-16 md:w-auto object-contain bg-transparent hover:opacity-90 transition-opacity" 
+                        className="h-12 w-12 md:h-10 md:w-10 object-contain bg-transparent" 
                       />
+                      <h1 className="text-xl font-bold text-foreground">BIMxPlan Go</h1>
                     </a>
                   </div>
                 </div>
