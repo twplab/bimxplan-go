@@ -116,7 +116,7 @@ const Dashboard = () => {
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <div className="min-h-screen w-full flex bg-gradient-to-br from-primary/5 via-background to-secondary/5">
         <AppSidebar />
         
@@ -127,9 +127,12 @@ const Dashboard = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <SidebarTrigger />
-                  <div className="flex items-center space-x-3">
-                    <img src={logoImage} alt="BIMxPlan Go" className="h-8 w-8" />
-                    <h1 className="text-2xl font-bold">BIMxPlan Go</h1>
+                  <div className="flex items-center">
+                    <img 
+                      src={logoImage} 
+                      alt="BIMxPlan Go" 
+                      className="h-16 w-16 md:h-12 md:w-12 object-contain bg-transparent" 
+                    />
                   </div>
                 </div>
                 <div className="flex items-center space-x-4">
