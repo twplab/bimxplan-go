@@ -124,7 +124,7 @@ const Dashboard = () => {
           {/* Header */}
           <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="px-4 py-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center space-x-4">
                   <SidebarTrigger />
                   <div className="flex items-center">
@@ -132,21 +132,24 @@ const Dashboard = () => {
                       <img 
                         src={logoImage} 
                         alt="BIMxPlan Go" 
-                        className="h-12 w-12 md:h-10 md:w-10 object-contain bg-transparent" 
+                        className="h-10 w-10 md:h-10 md:w-10 object-contain bg-transparent" 
                       />
-                      <h1 className="text-xl font-bold text-foreground">BIMxPlan Go</h1>
+                      <h1 className="text-lg sm:text-xl font-bold text-foreground">BIMxPlan Go</h1>
                     </a>
                   </div>
                 </div>
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm text-muted-foreground">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                  <span className="text-xs sm:text-sm text-muted-foreground truncate max-w-[200px] sm:max-w-none">
                     Welcome, {user?.email}
                   </span>
-                  <ThemeToggle />
-                  <Button variant="outline" size="sm" onClick={handleSignOut}>
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Sign Out
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <ThemeToggle />
+                    <Button variant="outline" size="sm" onClick={handleSignOut}>
+                      <LogOut className="h-4 w-4 mr-2" />
+                      <span className="hidden sm:inline">Sign Out</span>
+                      <span className="sm:hidden">Out</span>
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
