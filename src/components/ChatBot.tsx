@@ -51,17 +51,28 @@ export function ChatBot({ className }: ChatBotProps) {
       const selectors = [
         '[data-safe-zone]',
         '[data-fixed-bottom]',
+        'header',
         'footer',
+        'nav',
+        '[aria-label*="navigation" i]',
+        'nav[aria-label*="pagination" i]',
         '.fixed',
         '.sticky',
-        'nav[aria-label*="pagination" i]',
+        'button',
+        'a',
+        '[role="button"]',
+        'input',
+        'textarea',
+        'select',
+        '[data-interactive]',
         'div[class*="bottom-0"]',
         'div[class*="bottom-2"]',
         'div[class*="bottom-4"]',
         'div[class*="bottom-6"]',
         'div[class*="bottom-8"]',
-        'button[data-next]',
-        'a[data-next]',
+        '[class*="btn"]',
+        '[class*="button"]',
+        '[class*="cta"]',
       ].join(',');
 
       const nodes = Array.from(document.querySelectorAll<HTMLElement>(selectors));
@@ -116,7 +127,6 @@ export function ChatBot({ className }: ChatBotProps) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "authorization": "Bearer sk-3b_8o8TQqdkE9j6PIpOhTKBTGm152H91E7EI2juDqHU",
         },
         body: JSON.stringify({
           agent_uuid: "df6fc674-7e44-49bd-9829-d6554e069c9e",
@@ -170,17 +180,28 @@ export function ChatBot({ className }: ChatBotProps) {
     const selectors = [
       '[data-safe-zone]',
       '[data-fixed-bottom]',
+      'header',
       'footer',
+      'nav',
+      '[aria-label*="navigation" i]',
+      'nav[aria-label*="pagination" i]',
       '.fixed',
       '.sticky',
-      'nav[aria-label*="pagination" i]',
+      'button',
+      'a',
+      '[role="button"]',
+      'input',
+      'textarea',
+      'select',
+      '[data-interactive]',
       'div[class*="bottom-0"]',
       'div[class*="bottom-2"]',
       'div[class*="bottom-4"]',
       'div[class*="bottom-6"]',
       'div[class*="bottom-8"]',
-      'button[data-next]',
-      'a[data-next]',
+      '[class*="btn"]',
+      '[class*="button"]',
+      '[class*="cta"]',
     ].join(',');
     const bounds = getBounds();
     let rect = { left: x, top: y, right: x + bounds.w, bottom: y + bounds.h };
@@ -283,7 +304,7 @@ export function ChatBot({ className }: ChatBotProps) {
   return (
     <div
       ref={containerRef}
-      className={cn("fixed z-50 pointer-events-none", !hasUserPosition && "right-4 sm:right-6", className)}
+      className={cn("fixed z-50 pointer-events-none touch-none select-none", !hasUserPosition && "right-4 sm:right-6", className)}
       style={
         hasUserPosition
           ? { left: position.x, top: position.y }
@@ -298,12 +319,14 @@ export function ChatBot({ className }: ChatBotProps) {
           size="lg"
           className="pointer-events-auto rounded-full h-14 w-14 shadow-lg hover:shadow-xl transition-shadow bg-primary hover:bg-primary/90"
         >
-          <img
-            src="/lovable-uploads/68a29ced-73fb-45b0-8419-65dc7a9a7534.png"
-            alt="BIM Manager Tsoi chatbot icon"
-            className="h-8 w-8 rounded-full object-cover"
-            loading="lazy"
-          />
+          <div className="h-8 w-8 rounded-full bg-background ring-1 ring-primary-foreground/30 overflow-hidden">
+            <img
+              src="/lovable-uploads/39105823-4207-45ad-b096-398f33e2a00f.png"
+              alt="BIM Manager Tsoi chatbot icon"
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          </div>
         </Button>
       )}
 
@@ -311,12 +334,14 @@ export function ChatBot({ className }: ChatBotProps) {
         <Card className="w-80 sm:w-96 h-[480px] sm:h-[500px] shadow-2xl pointer-events-auto">
           <CardHeader onPointerDown={handlePointerDown} className="flex flex-row items-center justify-between space-y-0 pb-2 bg-primary text-primary-foreground rounded-t-lg">
             <div className="flex items-center space-x-2">
-              <img
-                src="/lovable-uploads/68a29ced-73fb-45b0-8419-65dc7a9a7534.png"
-                alt="BIM Manager Tsoi avatar"
-                className="h-8 w-8 rounded-full object-cover"
-                loading="lazy"
-              />
+              <div className="h-8 w-8 rounded-full bg-background ring-1 ring-border overflow-hidden">
+                <img
+                  src="/lovable-uploads/39105823-4207-45ad-b096-398f33e2a00f.png"
+                  alt="BIM Manager Tsoi avatar"
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
               <div>
                 <h3 className="font-semibold">BIM Manager Tsoi</h3>
                 <p className="text-xs opacity-90">Expert BIM Consultant</p>
@@ -359,9 +384,9 @@ export function ChatBot({ className }: ChatBotProps) {
                   <div className="flex justify-start">
                     <div className="bg-muted rounded-lg px-3 py-2 text-sm">
                       <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
-                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                        <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
+                        <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
                       </div>
                     </div>
                   </div>
