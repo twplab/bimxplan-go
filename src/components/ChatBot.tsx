@@ -321,7 +321,7 @@ export function ChatBot({ className }: ChatBotProps) {
         >
           <div className="h-8 w-8 rounded-full bg-background ring-1 ring-primary-foreground/30 overflow-hidden">
             <img
-              src="/lovable-uploads/39105823-4207-45ad-b096-398f33e2a00f.png"
+              src="/lovable-uploads/c46bcbd0-d86e-45fe-8da4-778681c85f31.png"
               alt="BIM Manager Tsoi chatbot icon"
               className="h-full w-full object-cover"
               loading="lazy"
@@ -336,7 +336,7 @@ export function ChatBot({ className }: ChatBotProps) {
             <div className="flex items-center space-x-2">
               <div className="h-8 w-8 rounded-full bg-background ring-1 ring-border overflow-hidden">
                 <img
-                  src="/lovable-uploads/39105823-4207-45ad-b096-398f33e2a00f.png"
+                  src="/lovable-uploads/c46bcbd0-d86e-45fe-8da4-778681c85f31.png"
                   alt="BIM Manager Tsoi avatar"
                   className="h-full w-full object-cover"
                   loading="lazy"
