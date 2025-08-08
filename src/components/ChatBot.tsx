@@ -39,12 +39,26 @@ export function ChatBot({ className }: ChatBotProps) {
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const dragRef = useRef({ startX: 0, startY: 0, offsetX: 0, offsetY: 0, moved: false });
 
+  // Restore last position from session storage
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('chatbot-position');
+      if (saved) {
+        const p = JSON.parse(saved);
+        if (typeof p?.x === 'number' && typeof p?.y === 'number') {
+          setPosition(p);
+          setHasUserPosition(true);
+        }
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (hasUserPosition) return;
     const compute = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      const base = vw < 640 ? 28 : 24; // extra lift on mobile
+      const base = vw < 640 ? 16 : 24; // 16px on mobile, 24px on desktop
       const reserved = 96; // approximate footprint of the widget
       const areaTop = vh - base - reserved;
 
@@ -272,7 +286,11 @@ export function ChatBot({ className }: ChatBotProps) {
 
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
-      setPosition(prev => avoidOverlaps(prev.x, prev.y));
+      setPosition(prev => {
+        const next = avoidOverlaps(prev.x, prev.y);
+        try { sessionStorage.setItem('chatbot-position', JSON.stringify(next)); } catch {}
+        return next;
+      });
     };
 
     window.addEventListener('pointermove', onMove);
@@ -291,6 +309,7 @@ export function ChatBot({ className }: ChatBotProps) {
       }));
     };
     window.addEventListener('resize', onResize);
+    onResize();
     return () => window.removeEventListener('resize', onResize);
   }, [hasUserPosition]);
 
@@ -313,23 +332,23 @@ export function ChatBot({ className }: ChatBotProps) {
     >
       {!isOpen && (
         <Button
-          aria-label="Open BIM Manager Tsoi chatbot"
+          aria-label="Open chat"
+          title="BIM Manager Tsoi – Chat"
           onClick={() => setIsOpen(true)}
           onPointerDown={handlePointerDown}
-          size="lg"
-          className="pointer-events-auto rounded-full h-14 w-14 shadow-lg hover:shadow-xl transition-shadow bg-primary hover:bg-primary/90"
+          variant="ghost"
+          size="icon"
+          className="pointer-events-auto rounded-full h-14 w-14 sm:h-16 sm:w-16 p-0 overflow-hidden bg-transparent hover:bg-transparent shadow-[0_6px_16px_rgba(0,0,0,0.18)] hover:shadow-[0_6px_16px_rgba(0,0,0,0.24)]"
         >
-          <div className="h-10 w-10 rounded-full bg-background ring-1 ring-primary-foreground/30 overflow-hidden">
-            <img
-              src="/lovable-uploads/c46bcbd0-d86e-45fe-8da4-778681c85f31.png?v=2"
-              alt="BIM Manager Tsoi chatbot icon"
-              className="h-full w-full object-cover"
-              loading="lazy"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = '/lovable-uploads/39105823-4207-45ad-b096-398f33e2a00f.png?v=2';
-              }}
-            />
-          </div>
+          <img
+            src="/lovable-uploads/b412b245-ab6f-4b93-b00b-363116ccd576.png?v=1"
+            alt="BIM Manager Tsoi – Chat"
+            className="h-full w-full object-cover object-center block"
+            loading="lazy"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = '/lovable-uploads/39105823-4207-45ad-b096-398f33e2a00f.png?v=2';
+            }}
+          />
         </Button>
       )}
 
