@@ -319,12 +319,15 @@ export function ChatBot({ className }: ChatBotProps) {
           size="lg"
           className="pointer-events-auto rounded-full h-14 w-14 shadow-lg hover:shadow-xl transition-shadow bg-primary hover:bg-primary/90"
         >
-          <div className="h-8 w-8 rounded-full bg-background ring-1 ring-primary-foreground/30 overflow-hidden">
+          <div className="h-10 w-10 rounded-full bg-background ring-1 ring-primary-foreground/30 overflow-hidden">
             <img
-              src="/lovable-uploads/c46bcbd0-d86e-45fe-8da4-778681c85f31.png"
+              src="/lovable-uploads/c46bcbd0-d86e-45fe-8da4-778681c85f31.png?v=2"
               alt="BIM Manager Tsoi chatbot icon"
               className="h-full w-full object-cover"
               loading="lazy"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = '/lovable-uploads/39105823-4207-45ad-b096-398f33e2a00f.png?v=2';
+              }}
             />
           </div>
         </Button>
@@ -334,12 +337,15 @@ export function ChatBot({ className }: ChatBotProps) {
         <Card className="w-80 sm:w-96 h-[480px] sm:h-[500px] shadow-2xl pointer-events-auto">
           <CardHeader onPointerDown={handlePointerDown} className="flex flex-row items-center justify-between space-y-0 pb-2 bg-primary text-primary-foreground rounded-t-lg">
             <div className="flex items-center space-x-2">
-              <div className="h-8 w-8 rounded-full bg-background ring-1 ring-border overflow-hidden">
+              <div className="h-10 w-10 rounded-full bg-background ring-1 ring-border overflow-hidden">
                 <img
-                  src="/lovable-uploads/c46bcbd0-d86e-45fe-8da4-778681c85f31.png"
+                  src="/lovable-uploads/c46bcbd0-d86e-45fe-8da4-778681c85f31.png?v=2"
                   alt="BIM Manager Tsoi avatar"
                   className="h-full w-full object-cover"
                   loading="lazy"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = '/lovable-uploads/39105823-4207-45ad-b096-398f33e2a00f.png?v=2';
+                  }}
                 />
               </div>
               <div>
