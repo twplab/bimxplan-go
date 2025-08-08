@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-
+import { useLocation } from "react-router-dom";
 interface Message {
   id: string;
   content: string;
@@ -39,6 +39,35 @@ export function ChatBot({ className }: ChatBotProps) {
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const dragRef = useRef({ startX: 0, startY: 0, offsetX: 0, offsetY: 0, moved: false });
 
+  // Inactivity timer to auto-reset position
+  const inactivityTimerRef = useRef<number | null>(null);
+  const clearInactivityTimer = () => {
+    if (inactivityTimerRef.current) {
+      window.clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = null;
+    }
+  };
+  const startInactivityTimer = () => {
+    clearInactivityTimer();
+    inactivityTimerRef.current = window.setTimeout(() => {
+      if (!isOpen) {
+        resetToDefaultPosition();
+      }
+    }, 2000);
+  };
+
+  // Reset to default bottom-right location and clear persisted position
+  const resetToDefaultPosition = () => {
+    clearInactivityTimer();
+    setHasUserPosition(false);
+    try { sessionStorage.removeItem('chatbot-position'); } catch {}
+  };
+
+  // Open chat and snap back to default location
+  const openChat = () => {
+    resetToDefaultPosition();
+    setIsOpen(true);
+  };
   // Restore last position from session storage
   useEffect(() => {
     try {
@@ -264,6 +293,7 @@ export function ChatBot({ className }: ChatBotProps) {
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!containerRef.current) return;
+    clearInactivityTimer();
     const rect = containerRef.current.getBoundingClientRect();
     dragRef.current = {
       startX: e.clientX,
@@ -291,6 +321,7 @@ export function ChatBot({ className }: ChatBotProps) {
         try { sessionStorage.setItem('chatbot-position', JSON.stringify(next)); } catch {}
         return next;
       });
+      startInactivityTimer();
     };
 
     window.addEventListener('pointermove', onMove);
@@ -313,6 +344,20 @@ export function ChatBot({ className }: ChatBotProps) {
     return () => window.removeEventListener('resize', onResize);
   }, [hasUserPosition]);
 
+  // Auto-return to default after 2s of inactivity when not open
+  useEffect(() => {
+    if (isOpen) {
+      clearInactivityTimer();
+      return;
+    }
+    if (hasUserPosition) {
+      startInactivityTimer();
+    }
+    return () => {
+      clearInactivityTimer();
+    };
+  }, [isOpen, hasUserPosition]);
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -320,10 +365,16 @@ export function ChatBot({ className }: ChatBotProps) {
     }
   };
 
+  const location = useLocation();
+  const path = location.pathname || '';
+  if (path.startsWith('/auth') || path.startsWith('/bim-execution-plan')) {
+    return null;
+  }
+
   return (
     <div
       ref={containerRef}
-      className={cn("fixed z-50 pointer-events-none touch-none select-none", !hasUserPosition && "right-4 sm:right-6", className)}
+      className={cn("fixed z-50 pointer-events-none touch-none select-none transition-all duration-300 ease-out", !hasUserPosition && "right-4 sm:right-6", className)}
       style={
         hasUserPosition
           ? { left: position.x, top: position.y }
@@ -334,7 +385,7 @@ export function ChatBot({ className }: ChatBotProps) {
         <Button
           aria-label="Open chat"
           title="BIM Manager Tsoi – Chat"
-          onClick={() => setIsOpen(true)}
+          onClick={openChat}
           onPointerDown={handlePointerDown}
           variant="ghost"
           size="icon"
@@ -354,7 +405,7 @@ export function ChatBot({ className }: ChatBotProps) {
 
       {isOpen && (
         <Card className="w-80 sm:w-96 h-[480px] sm:h-[500px] shadow-2xl pointer-events-auto">
-          <CardHeader onPointerDown={handlePointerDown} className="flex flex-row items-center justify-between space-y-0 pb-2 bg-primary text-primary-foreground rounded-t-lg">
+          <CardHeader onPointerDown={handlePointerDown} onDoubleClick={() => setIsOpen(false)} className="flex flex-row items-center justify-between space-y-0 pb-2 bg-primary text-primary-foreground rounded-t-lg">
             <div className="flex items-center space-x-2">
               <div className="h-10 w-10 rounded-full bg-background ring-1 ring-border overflow-hidden">
                 <img
