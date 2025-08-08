@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,12 +31,13 @@ export function ChatBot({ className }: ChatBotProps) {
   const [isLoading, setIsLoading] = useState(false);
   // Dynamic safe-zone offset to avoid overlapping critical UI
   const [bottomOffset, setBottomOffset] = useState<number>(24);
+  const lastOffsetRef = useRef(bottomOffset);
 
   useEffect(() => {
     const compute = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      const base = vw < 640 ? 20 : 24;
+      const base = vw < 640 ? 28 : 24; // extra lift on mobile
       const reserved = 96; // approximate footprint of the widget
       const areaTop = vh - base - reserved;
 
@@ -69,7 +70,11 @@ export function ChatBot({ className }: ChatBotProps) {
           }
         }
       }
-      setBottomOffset(base + increase);
+      const next = base + increase;
+      if (Math.abs(next - lastOffsetRef.current) > 6) {
+        lastOffsetRef.current = next;
+        setBottomOffset(next);
+      }
     };
 
     const ro = new ResizeObserver(() => compute());
@@ -78,12 +83,10 @@ export function ChatBot({ className }: ChatBotProps) {
     window.addEventListener('resize', compute);
     window.addEventListener('scroll', compute, true);
     compute();
-    const interval = setInterval(compute, 600);
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', compute);
       window.removeEventListener('scroll', compute, true);
-      clearInterval(interval);
     };
   }, []);
 
@@ -163,7 +166,7 @@ export function ChatBot({ className }: ChatBotProps) {
           className="pointer-events-auto rounded-full h-14 w-14 shadow-lg hover:shadow-xl transition-shadow bg-primary hover:bg-primary/90"
         >
           <img
-            src="/lovable-uploads/92905722-5a2b-4049-a247-98ef8dd82753.png"
+            src="/lovable-uploads/45ec3921-0c59-46d5-a91b-9d0cd3c2998a.png"
             alt="BIM Manager Tsoi chatbot icon"
             className="h-8 w-8 rounded-full object-cover"
             loading="lazy"
@@ -176,7 +179,7 @@ export function ChatBot({ className }: ChatBotProps) {
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-primary text-primary-foreground rounded-t-lg">
             <div className="flex items-center space-x-2">
               <img
-                src="/lovable-uploads/92905722-5a2b-4049-a247-98ef8dd82753.png"
+                src="/lovable-uploads/45ec3921-0c59-46d5-a91b-9d0cd3c2998a.png"
                 alt="BIM Manager Tsoi avatar"
                 className="h-8 w-8 rounded-full object-cover"
                 loading="lazy"
