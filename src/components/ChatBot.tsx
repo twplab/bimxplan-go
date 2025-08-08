@@ -33,7 +33,14 @@ export function ChatBot({ className }: ChatBotProps) {
   const [bottomOffset, setBottomOffset] = useState<number>(24);
   const lastOffsetRef = useRef(bottomOffset);
 
+  // Draggable positioning state
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [hasUserPosition, setHasUserPosition] = useState(false);
+  const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragRef = useRef({ startX: 0, startY: 0, offsetX: 0, offsetY: 0, moved: false });
+
   useEffect(() => {
+    if (hasUserPosition) return;
     const compute = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
@@ -88,7 +95,7 @@ export function ChatBot({ className }: ChatBotProps) {
       window.removeEventListener('resize', compute);
       window.removeEventListener('scroll', compute, true);
     };
-  }, []);
+  }, [hasUserPosition]);
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -146,6 +153,126 @@ export function ChatBot({ className }: ChatBotProps) {
     }
   };
 
+  // Dragging helpers and behavior
+  const getBounds = () => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const rect = containerRef.current?.getBoundingClientRect();
+    const w = rect?.width ?? 56;
+    const h = rect?.height ?? 56;
+    const margin = vw < 640 ? 12 : 16; // minimal padding from edges
+    return { minX: margin, minY: margin, maxX: vw - w - margin, maxY: vh - h - margin, w, h };
+  };
+
+  const clamp = (val: number, min: number, max: number) => Math.min(Math.max(val, min), max);
+
+  const avoidOverlaps = (x: number, y: number) => {
+    const selectors = [
+      '[data-safe-zone]',
+      '[data-fixed-bottom]',
+      'footer',
+      '.fixed',
+      '.sticky',
+      'nav[aria-label*="pagination" i]',
+      'div[class*="bottom-0"]',
+      'div[class*="bottom-2"]',
+      'div[class*="bottom-4"]',
+      'div[class*="bottom-6"]',
+      'div[class*="bottom-8"]',
+      'button[data-next]',
+      'a[data-next]',
+    ].join(',');
+    const bounds = getBounds();
+    let rect = { left: x, top: y, right: x + bounds.w, bottom: y + bounds.h };
+    let pos = { x, y };
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>(selectors));
+    let iterations = 0;
+    const intersects = (r: DOMRect | {left:number;top:number;right:number;bottom:number}) =>
+      !(rect.right < r.left || rect.left > r.right || rect.bottom < r.top || rect.top > r.bottom);
+
+    while (iterations < 4) {
+      let moved = false;
+      for (const el of nodes) {
+        const style = getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') continue;
+        const r = el.getBoundingClientRect();
+        if (intersects(r)) {
+          const moveLeft = rect.right - r.left + 12;
+          const moveRight = r.right - rect.left + 12;
+          const moveUp = rect.bottom - r.top + 12;
+          const moveDown = r.bottom - rect.top + 12;
+
+          const options = [
+            { x: pos.x - moveLeft, y: pos.y, d: moveLeft },
+            { x: pos.x + moveRight, y: pos.y, d: moveRight },
+            { x: pos.x, y: pos.y - moveUp, d: moveUp },
+            { x: pos.x, y: pos.y + moveDown, d: moveDown },
+          ].map(o => ({
+            x: clamp(o.x, bounds.minX, bounds.maxX),
+            y: clamp(o.y, bounds.minY, bounds.maxY),
+            d: o.d,
+          }));
+
+          options.sort((a, b) => a.d - b.d);
+          const best = options[0];
+          pos = { x: best.x, y: best.y };
+          rect = { left: pos.x, top: pos.y, right: pos.x + bounds.w, bottom: pos.y + bounds.h };
+          moved = true;
+          break;
+        }
+      }
+      if (!moved) break;
+      iterations++;
+    }
+    return pos;
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      moved: false,
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      const bounds = getBounds();
+      let x = ev.clientX - dragRef.current.offsetX;
+      let y = ev.clientY - dragRef.current.offsetY;
+      x = clamp(x, bounds.minX, bounds.maxX);
+      y = clamp(y, bounds.minY, bounds.maxY);
+      dragRef.current.moved = true;
+      setHasUserPosition(true);
+      setPosition({ x, y });
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      setPosition(prev => avoidOverlaps(prev.x, prev.y));
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+    e.preventDefault();
+  };
+
+  // Keep user-placed widget inside viewport on resize
+  useEffect(() => {
+    if (!hasUserPosition) return;
+    const onResize = () => {
+      const bounds = getBounds();
+      setPosition(p => ({
+        x: clamp(p.x, bounds.minX, bounds.maxX),
+        y: clamp(p.y, bounds.minY, bounds.maxY),
+      }));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [hasUserPosition]);
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -155,18 +282,24 @@ export function ChatBot({ className }: ChatBotProps) {
 
   return (
     <div
-      className={cn("fixed right-4 sm:right-6 z-50 pointer-events-none", className)}
-      style={{ bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom))` }}
+      ref={containerRef}
+      className={cn("fixed z-50 pointer-events-none", !hasUserPosition && "right-4 sm:right-6", className)}
+      style={
+        hasUserPosition
+          ? { left: position.x, top: position.y }
+          : { bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom))` }
+      }
     >
       {!isOpen && (
         <Button
           aria-label="Open BIM Manager Tsoi chatbot"
           onClick={() => setIsOpen(true)}
+          onPointerDown={handlePointerDown}
           size="lg"
           className="pointer-events-auto rounded-full h-14 w-14 shadow-lg hover:shadow-xl transition-shadow bg-primary hover:bg-primary/90"
         >
           <img
-            src="/lovable-uploads/45ec3921-0c59-46d5-a91b-9d0cd3c2998a.png"
+            src="/lovable-uploads/68a29ced-73fb-45b0-8419-65dc7a9a7534.png"
             alt="BIM Manager Tsoi chatbot icon"
             className="h-8 w-8 rounded-full object-cover"
             loading="lazy"
@@ -176,10 +309,10 @@ export function ChatBot({ className }: ChatBotProps) {
 
       {isOpen && (
         <Card className="w-80 sm:w-96 h-[480px] sm:h-[500px] shadow-2xl pointer-events-auto">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-primary text-primary-foreground rounded-t-lg">
+          <CardHeader onPointerDown={handlePointerDown} className="flex flex-row items-center justify-between space-y-0 pb-2 bg-primary text-primary-foreground rounded-t-lg">
             <div className="flex items-center space-x-2">
               <img
-                src="/lovable-uploads/45ec3921-0c59-46d5-a91b-9d0cd3c2998a.png"
+                src="/lovable-uploads/68a29ced-73fb-45b0-8419-65dc7a9a7534.png"
                 alt="BIM Manager Tsoi avatar"
                 className="h-8 w-8 rounded-full object-cover"
                 loading="lazy"
