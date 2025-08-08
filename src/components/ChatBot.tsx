@@ -29,10 +29,6 @@ export function ChatBot({ className }: ChatBotProps) {
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  // Dynamic safe-zone offset to avoid overlapping critical UI
-  const [bottomOffset, setBottomOffset] = useState<number>(24);
-  const lastOffsetRef = useRef(bottomOffset);
-
   // Draggable positioning state
   const containerRef = useRef<HTMLDivElement>(null);
   const [hasUserPosition, setHasUserPosition] = useState(false);
@@ -82,74 +78,6 @@ export function ChatBot({ className }: ChatBotProps) {
     } catch {}
   }, []);
 
-  useEffect(() => {
-    if (hasUserPosition) return;
-    const compute = () => {
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      const base = vw < 640 ? 16 : 24; // 16px on mobile, 24px on desktop
-      const reserved = 96; // approximate footprint of the widget
-      const areaTop = vh - base - reserved;
-
-      const selectors = [
-        '[data-safe-zone]',
-        '[data-fixed-bottom]',
-        'header',
-        'footer',
-        'nav',
-        '[aria-label*="navigation" i]',
-        'nav[aria-label*="pagination" i]',
-        '.fixed',
-        '.sticky',
-        'button',
-        'a',
-        '[role="button"]',
-        'input',
-        'textarea',
-        'select',
-        '[data-interactive]',
-        'div[class*="bottom-0"]',
-        'div[class*="bottom-2"]',
-        'div[class*="bottom-4"]',
-        'div[class*="bottom-6"]',
-        'div[class*="bottom-8"]',
-        '[class*="btn"]',
-        '[class*="button"]',
-        '[class*="cta"]',
-      ].join(',');
-
-      const nodes = Array.from(document.querySelectorAll<HTMLElement>(selectors));
-      let increase = 0;
-      for (const el of nodes) {
-        const style = getComputedStyle(el);
-        if (style.display === 'none' || style.visibility === 'hidden') continue;
-        const rect = el.getBoundingClientRect();
-        if (rect.top > vh - 160 && rect.left < vw && rect.right > vw - 220) {
-          const overlapY = (areaTop + reserved) - rect.top;
-          if (overlapY > 0) {
-            increase = Math.max(increase, overlapY + 16);
-          }
-        }
-      }
-      const next = base + increase;
-      if (Math.abs(next - lastOffsetRef.current) > 6) {
-        lastOffsetRef.current = next;
-        setBottomOffset(next);
-      }
-    };
-
-    const ro = new ResizeObserver(() => compute());
-    ro.observe(document.body);
-
-    window.addEventListener('resize', compute);
-    window.addEventListener('scroll', compute, true);
-    compute();
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', compute);
-      window.removeEventListener('scroll', compute, true);
-    };
-  }, [hasUserPosition]);
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -374,11 +302,11 @@ export function ChatBot({ className }: ChatBotProps) {
   return (
     <div
       ref={containerRef}
-      className={cn("fixed z-50 pointer-events-none touch-none select-none transition-all duration-300 ease-out", !hasUserPosition && "right-4 sm:right-6", className)}
+      className={cn("fixed z-50 pointer-events-none touch-none select-none transition-all duration-300 ease-out", !hasUserPosition && "right-4 sm:right-6 bottom-4 sm:bottom-6", className)}
       style={
         hasUserPosition
           ? { left: position.x, top: position.y }
-          : { bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom))` }
+          : undefined
       }
     >
       {!isOpen && (
