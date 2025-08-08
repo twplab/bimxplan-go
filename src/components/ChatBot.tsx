@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageCircle, Send, X } from "lucide-react";
+import { Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Message {
@@ -29,6 +29,63 @@ export function ChatBot({ className }: ChatBotProps) {
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  // Dynamic safe-zone offset to avoid overlapping critical UI
+  const [bottomOffset, setBottomOffset] = useState<number>(24);
+
+  useEffect(() => {
+    const compute = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const base = vw < 640 ? 20 : 24;
+      const reserved = 96; // approximate footprint of the widget
+      const areaTop = vh - base - reserved;
+
+      const selectors = [
+        '[data-safe-zone]',
+        '[data-fixed-bottom]',
+        'footer',
+        '.fixed',
+        '.sticky',
+        'nav[aria-label*="pagination" i]',
+        'div[class*="bottom-0"]',
+        'div[class*="bottom-2"]',
+        'div[class*="bottom-4"]',
+        'div[class*="bottom-6"]',
+        'div[class*="bottom-8"]',
+        'button[data-next]',
+        'a[data-next]',
+      ].join(',');
+
+      const nodes = Array.from(document.querySelectorAll<HTMLElement>(selectors));
+      let increase = 0;
+      for (const el of nodes) {
+        const style = getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.top > vh - 160 && rect.left < vw && rect.right > vw - 220) {
+          const overlapY = (areaTop + reserved) - rect.top;
+          if (overlapY > 0) {
+            increase = Math.max(increase, overlapY + 16);
+          }
+        }
+      }
+      setBottomOffset(base + increase);
+    };
+
+    const ro = new ResizeObserver(() => compute());
+    ro.observe(document.body);
+
+    window.addEventListener('resize', compute);
+    window.addEventListener('scroll', compute, true);
+    compute();
+    const interval = setInterval(compute, 600);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', compute);
+      window.removeEventListener('scroll', compute, true);
+      clearInterval(interval);
+    };
+  }, []);
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -94,24 +151,36 @@ export function ChatBot({ className }: ChatBotProps) {
   };
 
   return (
-    <div className={cn("fixed bottom-6 right-6 z-50", className)}>
+    <div
+      className={cn("fixed right-4 sm:right-6 z-50 pointer-events-none", className)}
+      style={{ bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom))` }}
+    >
       {!isOpen && (
         <Button
+          aria-label="Open BIM Manager Tsoi chatbot"
           onClick={() => setIsOpen(true)}
           size="lg"
-          className="rounded-full h-14 w-14 shadow-lg hover:shadow-xl transition-shadow bg-primary hover:bg-primary/90"
+          className="pointer-events-auto rounded-full h-14 w-14 shadow-lg hover:shadow-xl transition-shadow bg-primary hover:bg-primary/90"
         >
-          <MessageCircle className="h-6 w-6" />
+          <img
+            src="/lovable-uploads/92905722-5a2b-4049-a247-98ef8dd82753.png"
+            alt="BIM Manager Tsoi chatbot icon"
+            className="h-8 w-8 rounded-full object-cover"
+            loading="lazy"
+          />
         </Button>
       )}
 
       {isOpen && (
-        <Card className="w-96 h-[500px] shadow-2xl">
+        <Card className="w-80 sm:w-96 h-[480px] sm:h-[500px] shadow-2xl pointer-events-auto">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-primary text-primary-foreground rounded-t-lg">
             <div className="flex items-center space-x-2">
-              <div className="h-8 w-8 rounded-full bg-primary-foreground/20 flex items-center justify-center">
-                <span className="text-sm font-bold">BT</span>
-              </div>
+              <img
+                src="/lovable-uploads/92905722-5a2b-4049-a247-98ef8dd82753.png"
+                alt="BIM Manager Tsoi avatar"
+                className="h-8 w-8 rounded-full object-cover"
+                loading="lazy"
+              />
               <div>
                 <h3 className="font-semibold">BIM Manager Tsoi</h3>
                 <p className="text-xs opacity-90">Expert BIM Consultant</p>
