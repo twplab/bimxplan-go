@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client"
 import { ProjectData } from "@/lib/supabase"
+import { bepErrorHandler, withBEPErrorHandling, retryWithBackoff } from "./BEPErrorHandler"
 
 /**
  * Single source of truth for BEP data collection
@@ -9,6 +10,8 @@ import { ProjectData } from "@/lib/supabase"
 export interface BEPExportData {
   projectId: string
   lastUpdated: string
+  projectName: string
+  clientName: string
   sections: {
     overview: ProjectOverviewData
     team: TeamData
@@ -20,6 +23,14 @@ export interface BEPExportData {
     checking: ModelCheckingData
     outputs: OutputsData
   }
+  validationIssues: ValidationIssue[]
+}
+
+export interface ValidationIssue {
+  section: string
+  field: string
+  message: string
+  severity: 'error' | 'warning'
 }
 
 interface ProjectOverviewData {
@@ -116,19 +127,90 @@ interface OutputsData {
 }
 
 /**
+ * Comprehensive validation function for BEP data
+ */
+export function validateBepData(data: Partial<ProjectData>): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  
+  // Project Overview validation
+  const overview = data?.project_overview
+  if (!overview?.project_name?.trim()) {
+    issues.push({ section: "Project Overview", field: "project_name", message: "Project name is required", severity: "error" })
+  }
+  if (!overview?.client_name?.trim()) {
+    issues.push({ section: "Project Overview", field: "client_name", message: "Client name is required", severity: "error" })
+  }
+  if (!overview?.location?.trim()) {
+    issues.push({ section: "Project Overview", field: "location", message: "Location is required", severity: "error" })
+  }
+  if (!overview?.project_type?.trim()) {
+    issues.push({ section: "Project Overview", field: "project_type", message: "Project type is required", severity: "error" })
+  }
+  
+  // Team validation
+  const team = data?.team_responsibilities
+  if (!team?.firms || team.firms.length === 0) {
+    issues.push({ section: "Team & Responsibilities", field: "firms", message: "At least one firm must be defined", severity: "error" })
+  } else {
+    team.firms.forEach((firm, index) => {
+      if (!firm.name?.trim()) {
+        issues.push({ section: "Team & Responsibilities", field: `firms[${index}].name`, message: `Firm ${index + 1} name is required`, severity: "error" })
+      }
+      if (!firm.discipline?.trim()) {
+        issues.push({ section: "Team & Responsibilities", field: `firms[${index}].discipline`, message: `Firm ${index + 1} discipline is required`, severity: "error" })
+      }
+      if (!firm.bim_lead?.trim()) {
+        issues.push({ section: "Team & Responsibilities", field: `firms[${index}].bim_lead`, message: `Firm ${index + 1} BIM lead is required`, severity: "error" })
+      }
+    })
+  }
+  
+  // Software validation
+  const software = data?.software_overview
+  if (!software?.main_tools || software.main_tools.length === 0) {
+    issues.push({ section: "Software Overview", field: "main_tools", message: "At least one main BIM tool must be defined", severity: "error" })
+  } else {
+    software.main_tools.forEach((tool, index) => {
+      if (!tool.name?.trim()) {
+        issues.push({ section: "Software Overview", field: `main_tools[${index}].name`, message: `Tool ${index + 1} name is required`, severity: "error" })
+      }
+    })
+  }
+  
+  // Modeling scope validation
+  const modeling = data?.modeling_scope
+  if (!modeling?.general_lod?.trim()) {
+    issues.push({ section: "Modeling Scope", field: "general_lod", message: "General LOD is required", severity: "error" })
+  }
+  if (!modeling?.units?.trim()) {
+    issues.push({ section: "Modeling Scope", field: "units", message: "Units specification is required", severity: "error" })
+  }
+  
+  // Collaboration validation
+  const collaboration = data?.collaboration_cde
+  if (!collaboration?.platform?.trim()) {
+    issues.push({ section: "Collaboration & CDE", field: "platform", message: "CDE platform is required", severity: "error" })
+  }
+  
+  // Model checking validation
+  const checking = data?.model_checking
+  if (!checking?.clash_detection_tools || checking.clash_detection_tools.length === 0) {
+    issues.push({ section: "Model Checking", field: "clash_detection_tools", message: "At least one clash detection tool must be specified", severity: "error" })
+  }
+  
+  return issues
+}
+
+/**
  * Fetches fresh BEP data from database
  * @param projectId - The project ID to fetch data for
  * @returns Complete BEP data structure
  */
 export async function getBepExportData(projectId: string): Promise<BEPExportData> {
-  const logData = {
-    timestamp: new Date().toISOString(),
-    action: 'DATA_COLLECTION_START',
-    projectId
-  }
-  console.log('[BEP-DATA-COLLECTOR]', logData)
+  return await withBEPErrorHandling(async () => {
+    bepErrorHandler.log('info', 'DATA_COLLECTION_START', 'Starting BEP data collection', { projectId })
 
-  try {
+    return await retryWithBackoff(async () => {
     // Check access first
     const { data: hasAccess, error: accessError } = await supabase
       .rpc('user_can_access_project', { project_uuid: projectId })
@@ -158,16 +240,22 @@ export async function getBepExportData(projectId: string): Promise<BEPExportData
 
     const projectData = (project.project_data as ProjectData) || {} as ProjectData
     
+    // Validate the data and get any issues
+    const validationIssues = validateBepData(projectData)
+    
     const exportData: BEPExportData = {
       projectId,
       lastUpdated: project.updated_at,
+      projectName: projectData?.project_overview?.project_name || project.name || 'Untitled Project',
+      clientName: projectData?.project_overview?.client_name || project.client_name || '',
+      validationIssues,
       sections: {
-        overview: projectData?.project_overview || {
-          project_name: '',
-          client_name: '',
-          location: '',
-          project_type: '',
-          key_milestones: []
+        overview: {
+          project_name: projectData?.project_overview?.project_name || project.name || '',
+          client_name: projectData?.project_overview?.client_name || project.client_name || '',
+          location: projectData?.project_overview?.location || project.location || '',
+          project_type: projectData?.project_overview?.project_type || project.project_type || '',
+          key_milestones: projectData?.project_overview?.key_milestones || []
         },
         team: {
           firms: projectData?.team_responsibilities?.firms || []
@@ -217,24 +305,16 @@ export async function getBepExportData(projectId: string): Promise<BEPExportData
       }
     }
 
-    console.log('[BEP-DATA-COLLECTOR]', {
-      ...logData,
-      action: 'DATA_COLLECTION_SUCCESS',
+    bepErrorHandler.log('info', 'DATA_COLLECTION_SUCCESS', 'BEP data collection completed', {
+      projectId,
       dataSize: JSON.stringify(exportData).length,
-      sectionsFound: Object.keys(exportData.sections).length
+      sectionsFound: Object.keys(exportData.sections).length,
+      validationIssues: exportData.validationIssues.length
     })
 
     return exportData
-    
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    console.log('[BEP-DATA-COLLECTOR]', {
-      ...logData,
-      action: 'DATA_COLLECTION_ERROR',
-      error: errorMessage
-    })
-    throw error
-  }
+    }, 3, 1000, 'DATA_COLLECTION_RETRY')
+  }, 'DATA_COLLECTION', { projectId })
 }
 
 /**
@@ -243,14 +323,12 @@ export async function getBepExportData(projectId: string): Promise<BEPExportData
  * @param currentData - Current form data to save
  */
 export async function ensureLatestSave(projectId: string, currentData: Partial<ProjectData>): Promise<void> {
-  console.log('[BEP-DATA-COLLECTOR]', {
-    timestamp: new Date().toISOString(),
-    action: 'ENSURE_LATEST_SAVE_START',
-    projectId,
-    dataSize: JSON.stringify(currentData).length
-  })
+  return await withBEPErrorHandling(async () => {
+    bepErrorHandler.log('info', 'ENSURE_LATEST_SAVE_START', 'Starting save operation', {
+      projectId,
+      dataSize: JSON.stringify(currentData).length
+    })
 
-  try {
     const { error } = await supabase
       .from('projects')
       .update({ 
@@ -263,20 +341,6 @@ export async function ensureLatestSave(projectId: string, currentData: Partial<P
       throw new Error(`Failed to save: ${error.message}`)
     }
 
-    console.log('[BEP-DATA-COLLECTOR]', {
-      timestamp: new Date().toISOString(),
-      action: 'ENSURE_LATEST_SAVE_SUCCESS',
-      projectId
-    })
-    
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    console.log('[BEP-DATA-COLLECTOR]', {
-      timestamp: new Date().toISOString(),
-      action: 'ENSURE_LATEST_SAVE_ERROR',
-      projectId,
-      error: errorMessage
-    })
-    throw error
-  }
+    bepErrorHandler.log('info', 'ENSURE_LATEST_SAVE_SUCCESS', 'Save operation completed', { projectId })
+  }, 'ENSURE_LATEST_SAVE', { projectId })
 }

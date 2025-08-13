@@ -17,6 +17,7 @@ import { EnhancedBEPPreview } from "./EnhancedBEPPreview"
 import { ProjectData } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import { supabase } from "@/integrations/supabase/client"
+import { validateStep, validateProjectData, ValidationReport } from "./BEPValidationService"
 
 interface BEPFormWizardProps {
   onClose: () => void
@@ -47,6 +48,7 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
   const [currentStep, setCurrentStep] = useState(0)
   const [projectData, setProjectData] = useState<Partial<ProjectData>>(initialData)
   const [stepValidations, setStepValidations] = useState<Record<string, StepValidation>>({})
+  const [validationReport, setValidationReport] = useState<ValidationReport | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [autoSaveTimeout, setAutoSaveTimeout] = useState<NodeJS.Timeout | null>(null)
@@ -69,22 +71,16 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
     return logData
   }, [projectId, currentStep, projectData])
 
-  // Validation function
-  const validateStep = useCallback((stepId: string, stepData: any): StepValidation => {
-    const step = STEPS.find(s => s.id === stepId)
-    if (!step) return { isValid: true, issues: [] }
+  // Enhanced validation function
+  const validateCurrentStep = useCallback((stepId: string, stepData: any): StepValidation => {
+    return validateStep(stepId, stepData)
+  }, [])
 
-    const issues: string[] = []
-    
-    step.required.forEach(field => {
-      if (!stepData || !stepData[field] || 
-          (Array.isArray(stepData[field]) && stepData[field].length === 0) ||
-          (typeof stepData[field] === 'string' && stepData[field].trim() === '')) {
-        issues.push(`${field.replace('_', ' ')} is required`)
-      }
-    })
-
-    return { isValid: issues.length === 0, issues }
+  // Update validation report when project data changes
+  const updateValidationReport = useCallback((data: Partial<ProjectData>) => {
+    const report = validateProjectData(data)
+    setValidationReport(report)
+    return report
   }, [])
 
   // Auto-save functionality
@@ -111,7 +107,7 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
   }, [autoSaveTimeout, onUpdate, logAction])
 
   const handleNext = () => {
-    const currentStepValidation = validateStep(STEPS[currentStep].id, projectData[STEPS[currentStep].id])
+    const currentStepValidation = validateCurrentStep(STEPS[currentStep].id, projectData[STEPS[currentStep].id])
     
     if (!currentStepValidation.isValid) {
       toast({
@@ -146,11 +142,14 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
     setProjectData(updatedData)
     
     // Validate step
-    const validation = validateStep(stepKey, stepData)
+    const validation = validateCurrentStep(stepKey, stepData)
     setStepValidations(prev => ({
       ...prev,
       [stepKey]: validation
     }))
+    
+    // Update overall validation report
+    updateValidationReport(updatedData)
     
     // Trigger auto-save
     triggerAutoSave(updatedData)
@@ -190,12 +189,16 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
       // Validate all steps on load
       const validations: Record<string, StepValidation> = {}
       STEPS.forEach(step => {
-        validations[step.id] = validateStep(step.id, projectData[step.id])
+        validations[step.id] = validateCurrentStep(step.id, projectData[step.id])
       })
       setStepValidations(validations)
+      
+      // Update validation report
+      updateValidationReport(projectData)
+      
       logAction('PROJECT_LOAD_SUCCESS', { validationsCount: Object.keys(validations).length })
     }
-  }, [projectId, validateStep, logAction, projectData])
+  }, [projectId, validateCurrentStep, updateValidationReport, logAction, projectData])
 
   // Cleanup auto-save timeout
   useEffect(() => {
@@ -237,6 +240,13 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
           <div className="flex justify-between items-center text-sm">
             <div className="flex items-center space-x-4">
               <span className="text-muted-foreground">Progress: {Math.round(progress)}%</span>
+              {validationReport && (
+                <div className="flex items-center space-x-1 text-xs">
+                  <Badge variant={validationReport.hasErrors ? "destructive" : validationReport.hasWarnings ? "secondary" : "default"}>
+                    {validationReport.completeness}% Complete
+                  </Badge>
+                </div>
+              )}
               {lastSaved && (
                 <div className="flex items-center space-x-1 text-xs text-muted-foreground">
                   <Check className="h-3 w-3 text-green-500" />

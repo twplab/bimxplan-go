@@ -12,15 +12,10 @@ import { supabase } from "@/integrations/supabase/client"
 import logoUrl from "@/assets/bimxplan-logo.png"
 import { BEPDiagnostics } from "./BEPDiagnostics"
 import { BEPTestResults } from "./BEPTestResults"
-import { getBepExportData, ensureLatestSave, BEPExportData } from "./BEPDataCollector"
+import { getBepExportData, ensureLatestSave, BEPExportData, ValidationIssue, validateBepData } from "./BEPDataCollector"
 import { mapProjectDataToPdfModel, PdfModel } from "./BEPPdfMapper"
 import { renderPdfFromModel, generatePdfFilename, createVersionEntry } from "./BEPPdfRenderer"
-
-interface ValidationIssue {
-  section: string
-  field: string
-  message: string
-}
+import { bepErrorHandler } from "./BEPErrorHandler"
 
 interface BEPPreviewProps {
   data?: Partial<ProjectData>
@@ -40,20 +35,17 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   const [exportData, setExportData] = useState<BEPExportData | null>(null)
   const { toast } = useToast()
   
-  // Enhanced logging function
+  // Enhanced logging function using centralized error handler
   const logAction = useCallback((action: string, data?: any) => {
-    const timestamp = new Date().toISOString()
-    const logData = {
-      timestamp,
-      action,
+    const context = {
       projectId: projectId || 'undefined',
       hasAccess,
       dataSize: JSON.stringify(baseData).length,
       retryCount,
       ...data
     }
-    console.log(`[BEP-${action}]`, logData)
-    return logData
+    bepErrorHandler.log('info', action, `BEP Preview: ${action}`, context)
+    return context
   }, [projectId, hasAccess, baseData, retryCount])
 
   // Data mapping layer to safely handle empty/undefined fields
@@ -65,32 +57,9 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
     return obj
   }
 
-  // Enhanced validation function
+  // Use centralized validation function
   const validateData = useCallback((data: Partial<ProjectData>): ValidationIssue[] => {
-    const issues: ValidationIssue[] = []
-    
-    // Project Overview validation
-    const overview = data?.project_overview
-    if (!overview?.project_name) {
-      issues.push({ section: "Project Overview", field: "project_name", message: "Project name is required" })
-    }
-    if (!overview?.client_name) {
-      issues.push({ section: "Project Overview", field: "client_name", message: "Client name is required" })
-    }
-    
-    // Team validation
-    const team = data?.team_responsibilities
-    if (!team?.firms || team.firms.length === 0) {
-      issues.push({ section: "Team", field: "firms", message: "At least one firm must be defined" })
-    }
-    
-    // Software validation
-    const software = data?.software_overview
-    if (!software?.main_tools || software.main_tools.length === 0) {
-      issues.push({ section: "Software", field: "main_tools", message: "At least one main BIM tool must be defined" })
-    }
-    
-    return issues
+    return validateBepData(data)
   }, [])
 
   const issues = useMemo(() => validateData(previewData), [validateData, previewData])
@@ -321,8 +290,9 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
           <div className="flex items-center space-x-4 text-sm text-muted-foreground">
             <span>Data Size: {JSON.stringify(previewData).length} chars</span>
             {issues.length > 0 && (
-              <Badge variant="destructive" className="text-xs">
-                {issues.length} validation issue{issues.length > 1 ? 's' : ''}
+              <Badge variant={issues.some(i => i.severity === 'error') ? "destructive" : "secondary"} className="text-xs">
+                {issues.filter(i => i.severity === 'error').length} error{issues.filter(i => i.severity === 'error').length !== 1 ? 's' : ''}
+                {issues.filter(i => i.severity === 'warning').length > 0 && `, ${issues.filter(i => i.severity === 'warning').length} warning${issues.filter(i => i.severity === 'warning').length !== 1 ? 's' : ''}`}
               </Badge>
             )}
             {hasAccess && (
@@ -346,9 +316,9 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
             {isRefreshing ? 'Refreshing...' : 'Refresh Preview'}
           </Button>
           
-          <Button
+            <Button
             onClick={generateComprehensivePDF}
-            disabled={exporting || !hasAccess}
+            disabled={exporting || !hasAccess || issues.filter(i => i.severity === 'error').length > 0}
             variant="default"
             size="sm"
             className="w-full sm:w-auto"
@@ -361,16 +331,28 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
 
       {/* Validation Issues */}
       {issues.length > 0 && (
-        <Alert>
+        <Alert variant={issues.some(i => i.severity === 'error') ? "destructive" : "default"}>
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Validation Issues</AlertTitle>
+          <AlertTitle>
+            {issues.some(i => i.severity === 'error') ? 'Validation Errors' : 'Validation Warnings'}
+          </AlertTitle>
           <AlertDescription>
-            <div className="space-y-1 mt-2">
-              {issues.map((issue, index) => (
-                <div key={index} className="text-sm">
-                  <strong>{issue.section}:</strong> {issue.message}
+            <div className="space-y-2 mt-2">
+              {issues.filter(i => i.severity === 'error').map((issue, index) => (
+                <div key={`error-${index}`} className="text-sm p-2 bg-destructive/10 rounded border-l-2 border-destructive">
+                  <strong className="text-destructive">{issue.section}:</strong> {issue.message}
                 </div>
               ))}
+              {issues.filter(i => i.severity === 'warning').map((issue, index) => (
+                <div key={`warning-${index}`} className="text-sm p-2 bg-yellow-50 rounded border-l-2 border-yellow-400">
+                  <strong className="text-yellow-700">{issue.section}:</strong> {issue.message}
+                </div>
+              ))}
+              {issues.some(i => i.severity === 'error') && (
+                <div className="text-sm text-muted-foreground mt-2">
+                  <strong>Note:</strong> PDF generation is disabled until all validation errors are resolved.
+                </div>
+              )}
             </div>
           </AlertDescription>
         </Alert>
