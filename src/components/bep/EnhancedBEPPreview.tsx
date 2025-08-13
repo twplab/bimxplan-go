@@ -564,7 +564,11 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
         <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <span>Preview & Export</span>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <Dialog open={showPreview} onOpenChange={setShowPreview}>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={refreshPreview} disabled={isRefreshing}>
+              <RotateCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>Refresh Preview</span>
+            </Button>
+            <Dialog open={showPreview} onOpenChange={(v) => { setShowPreview(v); if (v) refreshPreview() }}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm" className="w-full sm:w-auto">
                   <Eye className="h-4 w-4 mr-2" />
@@ -585,15 +589,15 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
               </DialogContent>
             </Dialog>
             
-            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleExportMarkdown}>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleCopyMarkdown}>
               <FileText className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Markdown</span>
-              <span className="sm:hidden">MD</span>
+              <span className="hidden sm:inline">Copy Markdown</span>
+              <span className="sm:hidden">Copy MD</span>
             </Button>
             
-            <Button size="sm" className="w-full sm:w-auto" onClick={generatePDF}>
-              <Download className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Export PDF</span>
+            <Button size="sm" className="w-full sm:w-auto" onClick={generatePDF} disabled={issues.length > 0 || exporting}>
+              <Download className={`h-4 w-4 mr-2 ${exporting ? 'animate-pulse' : ''}`} />
+              <span className="hidden sm:inline">{exporting ? 'Exporting…' : 'Export PDF'}</span>
               <span className="sm:hidden">PDF</span>
             </Button>
           </div>
@@ -601,21 +605,39 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       </CardHeader>
       
       <CardContent>
+        {issues.length > 0 && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTitle>Missing required fields</AlertTitle>
+            <AlertDescription>
+              {issues.slice(0, 5).map((i, idx) => (
+                <div key={idx}>• {i.section}: {i.message}</div>
+              ))}
+              {issues.length > 5 && <div>…and {issues.length - 5} more</div>}
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="text-center py-8">
           <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-medium mb-2">Your BEP is Ready</h3>
           <p className="text-muted-foreground mb-6">
-            Review your BIM Execution Plan and export it in your preferred format.
+            Refresh the preview, copy Markdown, or export a PDF. PDF export is disabled until required fields are completed.
           </p>
-          
           <div className="flex flex-col sm:flex-row justify-center gap-3 sm:space-x-4 sm:space-y-0">
-            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowPreview(true)}>
+            <Button variant="outline" className="w-full sm:w-auto" onClick={refreshPreview} disabled={isRefreshing}>
+              <RotateCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh Preview
+            </Button>
+            <Button variant="outline" className="w-full sm:w-auto" onClick={async () => { await refreshPreview(); setShowPreview(true) }}>
               <Eye className="h-4 w-4 mr-2" />
               Preview Document
             </Button>
-            <Button className="w-full sm:w-auto" onClick={generatePDF}>
-              <Download className="h-4 w-4 mr-2" />
-              Export PDF
+            <Button variant="outline" className="w-full sm:w-auto" onClick={handleCopyMarkdown}>
+              <FileText className="h-4 w-4 mr-2" />
+              Copy Markdown
+            </Button>
+            <Button className="w-full sm:w-auto" onClick={generatePDF} disabled={issues.length > 0 || exporting}>
+              <Download className={`h-4 w-4 mr-2 ${exporting ? 'animate-pulse' : ''}`} />
+              {exporting ? 'Exporting…' : 'Export PDF'}
             </Button>
           </div>
         </div>
