@@ -1,141 +1,170 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { Download, FileText, Eye, Calendar, Users, Building, MapPin } from "lucide-react"
+import { Download, FileText, Eye, Calendar, Users, Building, MapPin, RotateCw } from "lucide-react"
 import { ProjectData } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import jsPDF from 'jspdf'
+import { supabase } from "@/integrations/supabase/client"
+import logoUrl from "@/assets/bimxplan-logo.png"
+
+interface ValidationIssue {
+  section: string
+  field: string
+  message: string
+}
 
 interface BEPPreviewProps {
   data?: Partial<ProjectData>
   onUpdate?: (data: any) => void
   projectData?: Partial<ProjectData>
+  projectId?: string
+  onSave?: () => Promise<void>
 }
 
-export function EnhancedBEPPreview({ data, projectData }: BEPPreviewProps) {
+export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEPPreviewProps) {
   const [showPreview, setShowPreview] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([])
   const { toast } = useToast()
-  const bepData = data || projectData || {}
+  const bepData = useMemo(() => data || projectData || {}, [data, projectData])
+
+  const validateData = (d: Partial<ProjectData>): ValidationIssue[] => {
+    const issues: ValidationIssue[] = []
+    // Project Overview required
+    if (!d.project_overview?.project_name) issues.push({ section: 'Project Overview', field: 'project_name', message: 'Project name is required' })
+    if (!d.project_overview?.location) issues.push({ section: 'Project Overview', field: 'location', message: 'Location is required' })
+    if (!d.project_overview?.client_name) issues.push({ section: 'Project Overview', field: 'client_name', message: 'Client name is required' })
+
+    // Team basics (optional but recommended)
+    if (d.team_responsibilities?.firms?.length) {
+      d.team_responsibilities.firms.forEach((f, idx) => {
+        if (!f.name) issues.push({ section: 'Team & Responsibilities', field: `firms[${idx}].name`, message: 'Firm name missing' })
+        if (!f.bim_lead) issues.push({ section: 'Team & Responsibilities', field: `firms[${idx}].bim_lead`, message: 'BIM lead missing' })
+      })
+    }
+    return issues
+  }
+
+  const issues = useMemo(() => validateData(bepData), [bepData])
 
   const generateMarkdown = (data: Partial<ProjectData>): string => {
-    let markdown = `# BIM Execution Plan\n\n`
-    
-    // Project Overview
+    let md = `# BIM Execution Plan\n\n`
+
     if (data.project_overview) {
-      markdown += `## Project Overview\n\n`
-      markdown += `**Project Name:** ${data.project_overview.project_name || 'N/A'}\n`
-      markdown += `**Location:** ${data.project_overview.location || 'N/A'}\n`
-      markdown += `**Client:** ${data.project_overview.client_name || 'N/A'}\n`
-      markdown += `**Project Type:** ${data.project_overview.project_type || 'N/A'}\n\n`
-      
-      if (data.project_overview.key_milestones?.length) {
-        markdown += `### Key Milestones\n\n`
-        data.project_overview.key_milestones.forEach(milestone => {
-          markdown += `- **${milestone.name}** (${milestone.date}): ${milestone.description}\n`
+      md += `## Project Overview\n\n`
+      const po = data.project_overview
+      if (po.project_name) md += `**Project Name:** ${po.project_name}\n`
+      if (po.location) md += `**Location:** ${po.location}\n`
+      if (po.client_name) md += `**Client:** ${po.client_name}\n`
+      if (po.project_type) md += `**Project Type:** ${po.project_type}\n\n`
+      if (po.key_milestones?.length) {
+        md += `### Key Milestones\n\n`
+        po.key_milestones.forEach(m => {
+          const parts = [m.name, m.date].filter(Boolean).join(' - ')
+          if (parts) md += `- ${parts}${m.description ? `: ${m.description}` : ''}\n`
         })
-        markdown += `\n`
+        md += `\n`
       }
     }
 
-    // Team & Responsibilities
     if (data.team_responsibilities?.firms?.length) {
-      markdown += `## Team & Responsibilities\n\n`
-      data.team_responsibilities.firms.forEach(firm => {
-        markdown += `### ${firm.name}\n`
-        markdown += `- **Discipline:** ${firm.discipline}\n`
-        markdown += `- **BIM Lead:** ${firm.bim_lead}\n`
-        markdown += `- **Contact:** ${firm.contact_info}\n\n`
+      md += `## Team & Responsibilities\n\n`
+      data.team_responsibilities.firms.forEach(f => {
+        if (f.name) md += `### ${f.name}\n`
+        if (f.discipline) md += `- **Discipline:** ${f.discipline}\n`
+        if (f.bim_lead) md += `- **BIM Lead:** ${f.bim_lead}\n`
+        if (f.contact_info) md += `- **Contact:** ${f.contact_info}\n`
+        md += `\n`
       })
     }
 
-    // Software Overview
-    if (data.software_overview) {
-      markdown += `## Software Overview\n\n`
-      if (data.software_overview.main_tools?.length) {
-        markdown += `### Main Tools\n\n`
-        data.software_overview.main_tools.forEach(tool => {
-          markdown += `- **${tool.name}** (${tool.version}) - ${tool.discipline}: ${tool.usage}\n`
-        })
-        markdown += `\n`
-      }
+    if (data.software_overview?.main_tools?.length) {
+      md += `## Software Overview\n\n### Main Tools\n\n`
+      data.software_overview.main_tools.forEach(t => {
+        const name = t.name ? `**${t.name}**` : ''
+        const version = t.version ? ` (${t.version})` : ''
+        const disc = t.discipline ? ` - ${t.discipline}` : ''
+        const usage = t.usage ? `: ${t.usage}` : ''
+        const line = `${name}${version}${disc}${usage}`
+        if (name) md += `- ${line}\n`
+      })
+      md += `\n`
     }
 
-    // Modeling Scope
     if (data.modeling_scope) {
-      markdown += `## Modeling Scope\n\n`
-      markdown += `**General LOD:** ${data.modeling_scope.general_lod || 'N/A'}\n`
-      markdown += `**Units:** ${data.modeling_scope.units || 'N/A'}\n`
-      markdown += `**Levels/Grids Strategy:** ${data.modeling_scope.levels_grids_strategy || 'N/A'}\n\n`
-      
-      if (data.modeling_scope.discipline_lods?.length) {
-        markdown += `### Discipline-Specific LODs\n\n`
-        data.modeling_scope.discipline_lods.forEach(lod => {
-          markdown += `- **${lod.discipline}:** ${lod.lod_level} - ${lod.description}\n`
+      md += `## Modeling Scope\n\n`
+      const ms = data.modeling_scope
+      if (ms.general_lod) md += `**General LOD:** ${ms.general_lod}\n`
+      if (ms.units) md += `**Units:** ${ms.units}\n`
+      if (ms.levels_grids_strategy) md += `**Levels/Grids Strategy:** ${ms.levels_grids_strategy}\n\n`
+      if (ms.discipline_lods?.length) {
+        md += `### Discipline-Specific LODs\n\n`
+        ms.discipline_lods.forEach(l => {
+          const parts = [l.discipline, l.lod_level].filter(Boolean).join(': ')
+          const line = `${parts}${l.description ? ` - ${l.description}` : ''}`
+          if (parts) md += `- ${line}\n`
         })
-        markdown += `\n`
+        md += `\n`
       }
     }
 
-    // File Naming
     if (data.file_naming) {
-      markdown += `## File Naming Convention\n\n`
-      markdown += `**Use Standard Conventions:** ${data.file_naming.use_conventions ? 'Yes' : 'No'}\n`
-      markdown += `**Prefix Format:** ${data.file_naming.prefix_format || 'N/A'}\n`
-      markdown += `**Discipline Codes:** ${data.file_naming.discipline_codes || 'N/A'}\n`
-      markdown += `**Versioning Format:** ${data.file_naming.versioning_format || 'N/A'}\n\n`
+      md += `## File Naming Convention\n\n`
+      const fn = data.file_naming
+      if (typeof fn.use_conventions === 'boolean') md += `**Use Standard Conventions:** ${fn.use_conventions ? 'Yes' : 'No'}\n`
+      if (fn.prefix_format) md += `**Prefix Format:** ${fn.prefix_format}\n`
+      if (fn.discipline_codes) md += `**Discipline Codes:** ${fn.discipline_codes}\n`
+      if (fn.versioning_format) md += `**Versioning Format:** ${fn.versioning_format}\n\n`
     }
 
-    // Collaboration & CDE
     if (data.collaboration_cde) {
-      markdown += `## Collaboration & Common Data Environment\n\n`
-      markdown += `**Platform:** ${data.collaboration_cde.platform || 'N/A'}\n`
-      markdown += `**File Linking Method:** ${data.collaboration_cde.file_linking_method || 'N/A'}\n`
-      markdown += `**Sharing Frequency:** ${data.collaboration_cde.sharing_frequency || 'N/A'}\n`
-      markdown += `**Setup Responsibility:** ${data.collaboration_cde.setup_responsibility || 'N/A'}\n\n`
+      md += `## Collaboration & Common Data Environment\n\n`
+      const cde = data.collaboration_cde
+      if (cde.platform) md += `**Platform:** ${cde.platform}\n`
+      if (cde.file_linking_method) md += `**File Linking Method:** ${cde.file_linking_method}\n`
+      if (cde.sharing_frequency) md += `**Sharing Frequency:** ${cde.sharing_frequency}\n`
+      if (cde.setup_responsibility) md += `**Setup Responsibility:** ${cde.setup_responsibility}\n\n`
     }
 
-    // Geolocation
     if (data.geolocation) {
-      markdown += `## Geolocation & Coordinate System\n\n`
-      markdown += `**Georeferenced:** ${data.geolocation.is_georeferenced ? 'Yes' : 'No'}\n`
-      if (data.geolocation.is_georeferenced) {
-        markdown += `**Coordinate Setup:** ${data.geolocation.coordinate_setup || 'N/A'}\n`
-        markdown += `**Origin Location:** ${data.geolocation.origin_location || 'N/A'}\n`
-        markdown += `**Coordinate System:** ${data.geolocation.coordinate_system || 'N/A'}\n`
+      md += `## Geolocation & Coordinate System\n\n`
+      const geo = data.geolocation
+      if (typeof geo.is_georeferenced === 'boolean') md += `**Georeferenced:** ${geo.is_georeferenced ? 'Yes' : 'No'}\n`
+      if (geo.is_georeferenced) {
+        if (geo.coordinate_setup) md += `**Coordinate Setup:** ${geo.coordinate_setup}\n`
+        if (geo.origin_location) md += `**Origin Location:** ${geo.origin_location}\n`
+        if (geo.coordinate_system) md += `**Coordinate System:** ${geo.coordinate_system}\n`
       }
-      markdown += `\n`
+      md += `\n`
     }
 
-    // Model Checking
     if (data.model_checking) {
-      markdown += `## Model Checking & Coordination\n\n`
-      markdown += `**Clash Detection Tools:** ${data.model_checking.clash_detection_tools?.join(', ') || 'N/A'}\n`
-      markdown += `**Coordination Process:** ${data.model_checking.coordination_process || 'N/A'}\n`
-      markdown += `**Meeting Frequency:** ${data.model_checking.meeting_frequency || 'N/A'}\n\n`
+      md += `## Model Checking & Coordination\n\n`
+      const mc = data.model_checking
+      if (mc.clash_detection_tools?.length) md += `**Clash Detection Tools:** ${mc.clash_detection_tools.join(', ')}\n`
+      if (mc.coordination_process) md += `**Coordination Process:** ${mc.coordination_process}\n`
+      if (mc.meeting_frequency) md += `**Meeting Frequency:** ${mc.meeting_frequency}\n\n`
     }
 
-    // Outputs & Deliverables
-    if (data.outputs_deliverables) {
-      markdown += `## Outputs & Deliverables\n\n`
-      if (data.outputs_deliverables.deliverables_by_phase?.length) {
-        markdown += `### Deliverables by Phase\n\n`
-        data.outputs_deliverables.deliverables_by_phase.forEach(phase => {
-          markdown += `#### ${phase.phase}\n`
-          markdown += `- **Deliverables:** ${phase.deliverables?.join(', ') || 'N/A'}\n`
-          markdown += `- **Formats:** ${phase.formats?.join(', ') || 'N/A'}\n`
-          markdown += `- **Responsibility:** ${phase.responsibility || 'N/A'}\n\n`
-        })
-      }
+    if (data.outputs_deliverables?.deliverables_by_phase?.length) {
+      md += `## Outputs & Deliverables\n\n### Deliverables by Phase\n\n`
+      data.outputs_deliverables.deliverables_by_phase.forEach(p => {
+        if (!p.phase) return
+        md += `#### ${p.phase}\n`
+        if (p.deliverables?.length) md += `- **Deliverables:** ${p.deliverables.join(', ')}\n`
+        if (p.formats?.length) md += `- **Formats:** ${p.formats.join(', ')}\n`
+        if (p.responsibility) md += `- **Responsibility:** ${p.responsibility}\n\n`
+      })
     }
 
-    markdown += `---\n\n`
-    markdown += `*Generated by BIMxPlan Go on ${new Date().toLocaleDateString()}*\n`
-
-    return markdown
+    md += `---\n\n*Generated by BIMxPlan Go on ${new Date().toLocaleDateString()}*\n`
+    return md
   }
 
   const generatePDF = async () => {

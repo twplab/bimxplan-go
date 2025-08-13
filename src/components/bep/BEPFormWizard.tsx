@@ -1,4 +1,4 @@
-import { useState } from "react"
+import React, { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -70,7 +70,7 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
 
   const handleSave = async () => {
     if (onUpdate) {
-      onUpdate(projectData)
+      await onUpdate(projectData)
     }
     toast({
       title: "Project Saved",
@@ -109,11 +109,21 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
             <CardTitle>{STEPS[currentStep].title}</CardTitle>
           </CardHeader>
           <CardContent>
-            <CurrentStepComponent 
-              data={projectData[STEPS[currentStep].id as keyof ProjectData]} 
-              onUpdate={handleStepUpdate}
-              projectData={projectData}
-            />
+            {STEPS[currentStep].id === 'preview' ? (
+              React.createElement(CurrentStepComponent as any, {
+                data: projectData['preview' as keyof ProjectData],
+                onUpdate: handleStepUpdate,
+                projectData: projectData,
+                projectId,
+                onSave: handleSave,
+              })
+            ) : (
+              <CurrentStepComponent 
+                data={projectData[STEPS[currentStep].id as keyof ProjectData]} 
+                onUpdate={handleStepUpdate}
+                projectData={projectData}
+              />
+            )}
           </CardContent>
         </Card>
 
