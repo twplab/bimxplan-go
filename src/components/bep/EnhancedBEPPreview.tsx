@@ -37,6 +37,22 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   const baseData = useMemo(() => data || projectData || {}, [data, projectData])
   const [previewData, setPreviewData] = useState<Partial<ProjectData>>(baseData)
   
+  // Enhanced logging function
+  const logAction = (action: string, data?: any) => {
+    const timestamp = new Date().toISOString()
+    const logData = {
+      timestamp,
+      action,
+      projectId,
+      hasAccess,
+      payloadSize: JSON.stringify(baseData).length,
+      retryCount,
+      ...data
+    }
+    console.log(`[BEP-${action}]`, logData)
+    return logData
+  }
+  
   // Debounced update effect
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -51,16 +67,29 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   useEffect(() => {
     const checkAccess = async () => {
       if (!projectId) return
+      
+      const startTime = Date.now()
+      logAction('ACCESS_CHECK_START')
+      
       try {
         const { data, error } = await supabase.rpc('user_can_access_project', { project_uuid: projectId })
-        if (error) throw error
+        if (error) {
+          logAction('ACCESS_CHECK_ERROR', { error: error.message, code: error.code })
+          throw error
+        }
+        
+        const duration = Date.now() - startTime
         setHasAccess(!!data)
+        logAction('ACCESS_CHECK_SUCCESS', { hasAccess: !!data, duration })
+        
         if (!data) {
           toast({ title: 'Access Denied', description: 'You do not have permission to view this project.', variant: 'destructive' })
         }
       } catch (error) {
-        console.error('Access check failed', error)
+        const duration = Date.now() - startTime
+        logAction('ACCESS_CHECK_FAILED', { error: error instanceof Error ? error.message : 'Unknown error', duration })
         setHasAccess(false)
+        toast({ title: 'Access Check Failed', description: 'Could not verify project permissions', variant: 'destructive' })
       }
     }
     checkAccess()
@@ -68,6 +97,13 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
 
   const validateData = (d: Partial<ProjectData>): ValidationIssue[] => {
     const issues: ValidationIssue[] = []
+    
+    // Check if data is completely empty
+    if (!d || Object.keys(d).length === 0) {
+      issues.push({ section: 'Data', field: 'any', message: 'No project data available - please fill out the BEP form first' })
+      return issues
+    }
+    
     // Project Overview required
     if (!d.project_overview?.project_name) issues.push({ section: 'Project Overview', field: 'project_name', message: 'Project name is required' })
     if (!d.project_overview?.location) issues.push({ section: 'Project Overview', field: 'location', message: 'Location is required' })
@@ -80,6 +116,8 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
         if (!f.bim_lead) issues.push({ section: 'Team & Responsibilities', field: `firms[${idx}].bim_lead`, message: 'BIM lead missing' })
       })
     }
+    
+    logAction('VALIDATION_COMPLETE', { issueCount: issues.length, issues: issues.slice(0, 3) })
     return issues
   }
 
@@ -200,12 +238,19 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   }
 
   const refreshPreview = useCallback(async (retry = false) => {
-    if (!hasAccess && projectId) return
+    if (!hasAccess && projectId) {
+      logAction('REFRESH_BLOCKED', { reason: 'no_access' })
+      return
+    }
     
+    const startTime = Date.now()
+    logAction('REFRESH_START', { retry, attempt: retry ? retryCount + 1 : 1 })
     setIsRefreshing(true)
+    
     try {
       if (onSave) await onSave()
       let latest = baseData
+      
       if (projectId) {
         // Add timeout for large projects
         const timeoutPromise = new Promise((_, reject) => 
@@ -213,19 +258,48 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
         )
         const dataPromise = supabase
           .from('projects')
-          .select('project_data,id,name')
+          .select('project_data,id,name,owner_id')
           .eq('id', projectId)
           .maybeSingle()
         
         const { data, error } = await Promise.race([dataPromise, timeoutPromise]) as any
-        if (error) throw error
-        latest = (data?.project_data as Partial<ProjectData>) || latest
+        if (error) {
+          logAction('REFRESH_DB_ERROR', { error: error.message, code: error.code })
+          throw error
+        }
+        
+        if (!data) {
+          logAction('REFRESH_NO_DATA', { projectId })
+          throw new Error('Project not found')
+        }
+        
+        latest = (data?.project_data as Partial<ProjectData>) || {}
+        logAction('REFRESH_DATA_LOADED', { 
+          dataSize: JSON.stringify(latest).length, 
+          hasProjectData: Object.keys(latest).length > 0,
+          projectName: data.name 
+        })
       }
+      
       setPreviewData(latest)
       setRetryCount(0)
-      toast({ title: 'Preview updated', description: 'Preview reflects latest saved data.' })
+      
+      const duration = Date.now() - startTime
+      logAction('REFRESH_SUCCESS', { duration, dataValid: Object.keys(latest).length > 0 })
+      
+      if (Object.keys(latest).length === 0) {
+        toast({ 
+          title: 'No project data', 
+          description: 'Please fill out the BEP form first to generate a preview.' 
+        })
+      } else {
+        toast({ title: 'Preview updated', description: 'Preview reflects latest saved data.' })
+      }
     } catch (error) {
-      console.error('Preview refresh error', { projectId, error, retry })
+      const duration = Date.now() - startTime
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+      logAction('REFRESH_ERROR', { error: errorMsg, duration, retry, retryCount })
+      
       if (!retry && retryCount < 2) {
         setRetryCount(prev => prev + 1)
         toast({ 
@@ -235,11 +309,12 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
         setTimeout(() => refreshPreview(true), 1000)
         return
       }
+      
       toast({ 
         title: 'Preview refresh failed', 
-        description: error instanceof Error && error.message === 'Request timeout' 
+        description: errorMsg === 'Request timeout' 
           ? 'Request timed out. Try again for large projects.' 
-          : 'Could not refresh preview. Try again.',
+          : `Could not refresh preview: ${errorMsg}`,
         variant: 'destructive' 
       })
     } finally {
@@ -249,38 +324,64 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
 
   const generatePDF = async () => {
     if (!hasAccess && projectId) {
+      logAction('PDF_BLOCKED', { reason: 'no_access' })
       toast({ title: 'Access Denied', description: 'You do not have permission to export this project.', variant: 'destructive' })
       return
     }
 
+    const startTime = Date.now()
+    logAction('PDF_EXPORT_START')
     setExporting(true)
     const exportStartedAt = new Date()
+    
     try {
       if (onSave) await onSave()
 
       // Fetch freshest data from DB to avoid stale content
       let exportData: Partial<ProjectData> = previewData
+      let projectName = 'BEP_Export'
+      
       if (projectId) {
+        logAction('PDF_FETCHING_DATA')
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Export timeout')), 15000)
         )
         const dataPromise = supabase
           .from('projects')
-          .select('project_data,id,name')
+          .select('project_data,id,name,owner_id')
           .eq('id', projectId)
           .maybeSingle()
         
         const { data, error } = await Promise.race([dataPromise, timeoutPromise]) as any
-        if (error) throw error
-        exportData = (data?.project_data as Partial<ProjectData>) || exportData
+        if (error) {
+          logAction('PDF_DB_ERROR', { error: error.message, code: error.code })
+          throw new Error(`Database error: ${error.message}`)
+        }
+        
+        if (!data) {
+          logAction('PDF_NO_PROJECT')
+          throw new Error('Project not found')
+        }
+        
+        exportData = (data?.project_data as Partial<ProjectData>) || {}
+        projectName = data.name || 'BEP_Export'
+        
+        logAction('PDF_DATA_LOADED', { 
+          dataSize: JSON.stringify(exportData).length,
+          hasData: Object.keys(exportData).length > 0,
+          projectName 
+        })
       }
 
       const currentIssues = validateData(exportData)
       if (currentIssues.length) {
+        logAction('PDF_VALIDATION_FAILED', { issueCount: currentIssues.length })
         const list = currentIssues.slice(0, 5).map(i => `${i.section}: ${i.message}`).join(' • ')
         toast({ title: 'Missing required fields', description: list, variant: 'destructive' })
         return
       }
+      
+      logAction('PDF_GENERATING')
 
       const pdf = new jsPDF()
       const pageWidth = pdf.internal.pageSize.getWidth()
@@ -548,13 +649,22 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   }
 
   const handleCopyMarkdown = async () => {
+    logAction('MARKDOWN_COPY_START')
     try {
+      if (Object.keys(previewData).length === 0) {
+        toast({ title: 'No data to copy', description: 'Please fill out the BEP form first', variant: 'destructive' })
+        return
+      }
+      
       const markdown = generateMarkdown(previewData)
       await navigator.clipboard.writeText(markdown)
-      toast({ title: 'Markdown copied', description: 'BEP content copied to clipboard.' })
-    } catch (e) {
-      console.error('Copy markdown failed', e)
-      toast({ title: 'Copy failed', description: 'Could not copy markdown. Try export PDF instead.', variant: 'destructive' })
+      
+      logAction('MARKDOWN_COPY_SUCCESS', { length: markdown.length })
+      toast({ title: 'Copied to clipboard', description: 'Markdown content copied successfully' })
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+      logAction('MARKDOWN_COPY_ERROR', { error: errorMsg })
+      toast({ title: 'Copy failed', description: `Could not copy to clipboard: ${errorMsg}`, variant: 'destructive' })
     }
   }
 
