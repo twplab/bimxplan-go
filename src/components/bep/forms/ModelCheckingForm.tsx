@@ -1,20 +1,20 @@
-import { useForm, useFieldArray } from "react-hook-form"
+import React from "react"
+import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ModelChecking } from "@/lib/supabase"
-import { Plus, Trash2, Search, AlertTriangle } from "lucide-react"
+import { Search, Users } from "lucide-react"
 
 const modelCheckingSchema = z.object({
-  clash_detection_tools: z.array(z.string()),
-  coordination_process: z.string().min(1, "Coordination process is required"),
-  meeting_frequency: z.string().min(1, "Meeting frequency is required"),
+  clash_detection_tools: z.array(z.string()).min(1, "At least one tool is required"),
+  coordination_process: z.string(),
+  meeting_frequency: z.string(),
   responsibility_matrix: z.string(),
 })
 
@@ -25,25 +25,22 @@ interface ModelCheckingFormProps {
   onUpdate: (data: ModelCheckingFormData) => void
 }
 
-const CLASH_DETECTION_TOOLS = [
+const CLASH_TOOLS = [
   "Navisworks Manage",
-  "Navisworks Freedom",
-  "Autodesk Construction Cloud Model Coordination",
+  "Autodesk BIM 360 Model Coordination",
   "Solibri Model Checker",
-  "BIMcollab ZOOM",
-  "Tekla BIMsight",
   "Trimble Connect",
+  "BIMcollab",
   "Other"
 ]
 
 const MEETING_FREQUENCIES = [
   "Daily",
-  "Twice weekly",
   "Weekly",
   "Bi-weekly",
   "Monthly",
-  "Before major milestones",
-  "As needed"
+  "Per Milestone",
+  "As Needed"
 ]
 
 export function ModelCheckingForm({ data, onUpdate }: ModelCheckingFormProps) {
@@ -57,58 +54,60 @@ export function ModelCheckingForm({ data, onUpdate }: ModelCheckingFormProps) {
     },
   })
 
-  const onSubmit = (values: ModelCheckingFormData) => {
-    onUpdate(values)
-  }
+  React.useEffect(() => {
+    const subscription = form.watch((values) => {
+      onUpdate(values as ModelCheckingFormData)
+    })
+    return () => subscription.unsubscribe()
+  }, [form, onUpdate])
 
   const selectedTools = form.watch("clash_detection_tools")
 
-  const toggleTool = (tool: string) => {
-    const current = selectedTools || []
-    const updated = current.includes(tool)
-      ? current.filter(t => t !== tool)
-      : [...current, tool]
-    form.setValue("clash_detection_tools", updated)
+  const handleToolChange = (tool: string, checked: boolean) => {
+    const currentTools = selectedTools || []
+    if (checked) {
+      form.setValue("clash_detection_tools", [...currentTools, tool])
+    } else {
+      form.setValue("clash_detection_tools", currentTools.filter(t => t !== tool))
+    }
   }
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form className="space-y-6">
         <Card>
           <CardHeader>
             <div className="flex items-center space-x-2">
               <Search className="h-5 w-5 text-primary" />
-              <CardTitle className="text-lg">Model Checking & Clash Detection</CardTitle>
+              <CardTitle className="text-lg">Clash Detection & Quality Control</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Clash Detection Tools */}
-            <div className="space-y-4">
-              <FormLabel>Clash Detection Tools</FormLabel>
-              <FormDescription>
-                Select the software tools that will be used for model coordination and clash detection
-              </FormDescription>
-              
-              <div className="grid grid-cols-2 gap-3">
-                {CLASH_DETECTION_TOOLS.map((tool) => (
-                  <div key={tool} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={tool}
-                      checked={selectedTools?.includes(tool) || false}
-                      onCheckedChange={() => toggleTool(tool)}
-                    />
-                    <label 
-                      htmlFor={tool}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      {tool}
-                    </label>
+          <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
+              name="clash_detection_tools"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Clash Detection Tools (Select all that apply)</FormLabel>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                    {CLASH_TOOLS.map((tool) => (
+                      <div key={tool} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={tool}
+                          checked={selectedTools?.includes(tool) || false}
+                          onCheckedChange={(checked) => handleToolChange(tool, checked as boolean)}
+                        />
+                        <label htmlFor={tool} className="text-sm font-medium cursor-pointer">
+                          {tool}
+                        </label>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-            {/* Meeting Frequency */}
             <FormField
               control={form.control}
               name="meeting_frequency"
@@ -118,7 +117,7 @@ export function ModelCheckingForm({ data, onUpdate }: ModelCheckingFormProps) {
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select meeting frequency" />
+                        <SelectValue placeholder="Select frequency" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -129,25 +128,10 @@ export function ModelCheckingForm({ data, onUpdate }: ModelCheckingFormProps) {
                       ))}
                     </SelectContent>
                   </Select>
-                  <FormDescription>
-                    How often the team will meet to review coordination issues
-                  </FormDescription>
-                  <FormMessage />
                 </FormItem>
               )}
             />
-          </CardContent>
-        </Card>
 
-        {/* Coordination Process */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center space-x-2">
-              <AlertTriangle className="h-5 w-5 text-accent" />
-              <CardTitle className="text-lg">Coordination Process</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
             <FormField
               control={form.control}
               name="coordination_process"
@@ -156,15 +140,11 @@ export function ModelCheckingForm({ data, onUpdate }: ModelCheckingFormProps) {
                   <FormLabel>Coordination Workflow</FormLabel>
                   <FormControl>
                     <Textarea 
-                      placeholder="Describe the step-by-step process for model coordination, including who runs clash detection, how issues are reported, resolution workflow, and verification process"
-                      className="min-h-[120px]"
+                      placeholder="Describe model coordination process, clash resolution workflow, issue tracking..."
+                      className="min-h-[80px]"
                       {...field} 
                     />
                   </FormControl>
-                  <FormDescription>
-                    Define the complete workflow from clash detection to resolution
-                  </FormDescription>
-                  <FormMessage />
                 </FormItem>
               )}
             />
@@ -174,71 +154,17 @@ export function ModelCheckingForm({ data, onUpdate }: ModelCheckingFormProps) {
               name="responsibility_matrix"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Responsibility Matrix (Optional)</FormLabel>
+                  <FormLabel>Responsibility Matrix</FormLabel>
                   <FormControl>
                     <Textarea 
-                      placeholder="Define who is responsible for different types of coordination issues (e.g., Structural vs MEP clashes resolved by Structural Engineer, MEP vs Architecture resolved by Architect, etc.)"
-                      className="min-h-[100px]"
+                      placeholder="Define responsibilities for clash detection runs, issue resolution, model quality checks..."
+                      className="min-h-[80px]"
                       {...field} 
                     />
                   </FormControl>
-                  <FormDescription>
-                    Clarify responsibility for resolving different types of coordination issues
-                  </FormDescription>
-                  <FormMessage />
                 </FormItem>
               )}
             />
-          </CardContent>
-        </Card>
-
-        {/* Coordination Workflow Visualization */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Typical Coordination Workflow</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 text-center">
-              <div className="space-y-3 p-3 sm:p-0">
-                <div className="h-12 w-12 bg-primary/20 rounded-lg flex items-center justify-center mx-auto">
-                  <span className="text-sm font-bold text-primary">1</span>
-                </div>
-                <h4 className="font-medium text-sm leading-tight">Model Upload</h4>
-                <p className="text-xs text-muted-foreground leading-relaxed px-1">
-                  Teams upload latest models to CDE
-                </p>
-              </div>
-              
-              <div className="space-y-3 p-3 sm:p-0">
-                <div className="h-12 w-12 bg-accent/20 rounded-lg flex items-center justify-center mx-auto">
-                  <span className="text-sm font-bold text-accent">2</span>
-                </div>
-                <h4 className="font-medium text-sm leading-tight">Clash Detection</h4>
-                <p className="text-xs text-muted-foreground leading-relaxed px-1">
-                  Run automated clash detection
-                </p>
-              </div>
-              
-              <div className="space-y-3 p-3 sm:p-0">
-                <div className="h-12 w-12 bg-primary/20 rounded-lg flex items-center justify-center mx-auto">
-                  <span className="text-sm font-bold text-primary">3</span>
-                </div>
-                <h4 className="font-medium text-sm leading-tight">Issue Resolution</h4>
-                <p className="text-xs text-muted-foreground leading-relaxed px-1">
-                  Coordinate and resolve conflicts
-                </p>
-              </div>
-              
-              <div className="space-y-3 p-3 sm:p-0">
-                <div className="h-12 w-12 bg-accent/20 rounded-lg flex items-center justify-center mx-auto">
-                  <span className="text-sm font-bold text-accent">4</span>
-                </div>
-                <h4 className="font-medium text-sm leading-tight">Verification</h4>
-                <p className="text-xs text-muted-foreground leading-relaxed px-1">
-                  Verify fixes and update models
-                </p>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </form>
