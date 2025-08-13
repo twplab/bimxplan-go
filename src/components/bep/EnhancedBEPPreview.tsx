@@ -66,7 +66,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
     const issues: ValidationIssue[] = []
     
     // Project Overview validation
-    const overview = (data as any)?.overview
+    const overview = data?.project_overview
     if (!overview?.project_name) {
       issues.push({ section: "Project Overview", field: "project_name", message: "Project name is required" })
     }
@@ -75,13 +75,13 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
     }
     
     // Team validation
-    const team = (data as any)?.team
+    const team = data?.team_responsibilities
     if (!team?.firms || team.firms.length === 0) {
       issues.push({ section: "Team", field: "firms", message: "At least one firm must be defined" })
     }
     
     // Software validation
-    const software = (data as any)?.software
+    const software = data?.software_overview
     if (!software?.main_tools || software.main_tools.length === 0) {
       issues.push({ section: "Software", field: "main_tools", message: "At least one main BIM tool must be defined" })
     }
@@ -234,14 +234,14 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       pdf.setFontSize(10)
       pdf.setFont('helvetica', 'normal')
       
-      const overview = previewData.overview || {}
-      pdf.text(`Project Name: ${safeText(overview.project_name)}`, margin, yPosition)
+      const overview = previewData.project_overview
+      pdf.text(`Project Name: ${safeText(overview?.project_name)}`, margin, yPosition)
       yPosition += 6
-      pdf.text(`Client: ${safeText(overview.client_name)}`, margin, yPosition)
+      pdf.text(`Client: ${safeText(overview?.client_name)}`, margin, yPosition)
       yPosition += 6
-      pdf.text(`Location: ${safeText(overview.location)}`, margin, yPosition)
+      pdf.text(`Location: ${safeText(overview?.location)}`, margin, yPosition)
       yPosition += 6
-      pdf.text(`Project Type: ${safeText(overview.project_type)}`, margin, yPosition)
+      pdf.text(`Project Type: ${safeText(overview?.project_type)}`, margin, yPosition)
       yPosition += 15
       
       // Team & Responsibilities Section
@@ -251,8 +251,8 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       pdf.text('2. Team & Responsibilities', margin, yPosition)
       yPosition += 10
       
-      const team = previewData.team || {}
-      if (team.firms && team.firms.length > 0) {
+      const team = previewData.team_responsibilities
+      if (team?.firms && team.firms.length > 0) {
         pdf.setFontSize(10)
         pdf.setFont('helvetica', 'normal')
         team.firms.forEach((firm: any, index: number) => {
@@ -276,8 +276,8 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       pdf.text('3. Software Overview', margin, yPosition)
       yPosition += 10
       
-      const software = previewData.software || {}
-      if (software.main_tools && software.main_tools.length > 0) {
+      const software = previewData.software_overview
+      if (software?.main_tools && software.main_tools.length > 0) {
         pdf.setFontSize(10)
         pdf.setFont('helvetica', 'normal')
         software.main_tools.forEach((tool: any) => {
@@ -291,7 +291,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       // Additional sections can be added here following the same pattern
       
       // Generate filename
-      const projectName = overview.project_name || 'BEP_Project'
+      const projectName = overview?.project_name || 'BEP_Project'
       const timestamp = new Date().toISOString().slice(0, 16).replace(/[:\-T]/g, '_')
       const filename = `${projectName.replace(/[^a-zA-Z0-9]/g, '_')}_BEP_Summary_${timestamp}.pdf`
       
@@ -355,35 +355,35 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
           <div className="text-center border-b pb-4">
             <h1 className="text-2xl font-bold">BIM Execution Plan</h1>
             <p className="text-muted-foreground">
-              {previewData.overview?.project_name || 'Project Name Not Set'}
+              {previewData.project_overview?.project_name || 'Project Name Not Set'}
             </p>
           </div>
 
           {/* Project Overview */}
-          {previewData.overview && (
+          {previewData.project_overview && (
             <section>
               <h2 className="text-lg font-semibold mb-3 flex items-center">
                 <Building className="h-5 w-5 mr-2" />
                 1. Project Overview
               </h2>
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><strong>Project Name:</strong> {safeMap(previewData.overview.project_name)}</div>
-                <div><strong>Client:</strong> {safeMap(previewData.overview.client_name)}</div>
-                <div><strong>Location:</strong> {safeMap(previewData.overview.location)}</div>
-                <div><strong>Type:</strong> {safeMap(previewData.overview.project_type)}</div>
+                <div><strong>Project Name:</strong> {safeMap(previewData.project_overview.project_name)}</div>
+                <div><strong>Client:</strong> {safeMap(previewData.project_overview.client_name)}</div>
+                <div><strong>Location:</strong> {safeMap(previewData.project_overview.location)}</div>
+                <div><strong>Type:</strong> {safeMap(previewData.project_overview.project_type)}</div>
               </div>
             </section>
           )}
 
           {/* Team & Responsibilities */}
-          {previewData.team?.firms && previewData.team.firms.length > 0 && (
+          {previewData.team_responsibilities?.firms && previewData.team_responsibilities.firms.length > 0 && (
             <section>
               <h2 className="text-lg font-semibold mb-3 flex items-center">
                 <Users className="h-5 w-5 mr-2" />
                 2. Team & Responsibilities
               </h2>
               <div className="space-y-3">
-                {previewData.team.firms.map((firm: any, index: number) => (
+                {previewData.team_responsibilities.firms.map((firm: any, index: number) => (
                   <div key={index} className="border rounded p-3">
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div><strong>Firm:</strong> {safeMap(firm.name)}</div>
@@ -398,14 +398,14 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
           )}
 
           {/* Software Overview */}
-          {previewData.software?.main_tools && previewData.software.main_tools.length > 0 && (
+          {previewData.software_overview?.main_tools && previewData.software_overview.main_tools.length > 0 && (
             <section>
               <h2 className="text-lg font-semibold mb-3 flex items-center">
                 <Settings className="h-5 w-5 mr-2" />
                 3. Software Overview
               </h2>
               <div className="space-y-2">
-                {previewData.software.main_tools.map((tool: any, index: number) => (
+                {previewData.software_overview.main_tools.map((tool: any, index: number) => (
                   <div key={index} className="flex justify-between items-center text-sm border-b pb-1">
                     <span><strong>{safeMap(tool.name)}</strong> {safeMap(tool.version)}</span>
                     <Badge variant="outline">{safeMap(tool.discipline)}</Badge>
