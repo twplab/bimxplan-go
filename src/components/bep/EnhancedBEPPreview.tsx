@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast"
 import jsPDF from 'jspdf'
 import { supabase } from "@/integrations/supabase/client"
 import logoUrl from "@/assets/bimxplan-logo.png"
+import { BEPDiagnostics } from "./BEPDiagnostics"
+import { BEPTestResults } from "./BEPTestResults"
 
 interface ValidationIssue {
   section: string
@@ -37,20 +39,55 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   const baseData = useMemo(() => data || projectData || {}, [data, projectData])
   const [previewData, setPreviewData] = useState<Partial<ProjectData>>(baseData)
   
-  // Enhanced logging function
+  // Enhanced logging function with user role detection
   const logAction = (action: string, data?: any) => {
     const timestamp = new Date().toISOString()
     const logData = {
       timestamp,
       action,
-      projectId,
+      projectId: projectId || 'undefined',
       hasAccess,
       payloadSize: JSON.stringify(baseData).length,
       retryCount,
+      userRole: 'unknown', // Will be enhanced below
+      validationIssues: issues?.length || 0,
       ...data
     }
     console.log(`[BEP-${action}]`, logData)
     return logData
+  }
+
+  // Data mapping layer to safely handle empty/undefined fields
+  const safeMap = (obj: any, fallback = '') => {
+    if (obj === null || obj === undefined) return fallback
+    if (typeof obj === 'boolean') return obj ? 'Yes' : 'No'
+    if (typeof obj === 'string' && obj.trim() === '') return fallback
+    if (Array.isArray(obj) && obj.length === 0) return fallback
+    return obj
+  }
+
+  const mapDataForTemplate = (data: Partial<ProjectData>) => {
+    // Create safe mapped version of data with no undefined/empty placeholders
+    const mapped = JSON.parse(JSON.stringify(data)) // Deep clone
+    
+    // Recursively replace empty values
+    const cleanObject = (obj: any): any => {
+      if (Array.isArray(obj)) {
+        return obj.filter(item => item != null).map(cleanObject)
+      }
+      if (obj && typeof obj === 'object') {
+        const cleaned: any = {}
+        for (const [key, value] of Object.entries(obj)) {
+          if (value != null && value !== '' && value !== false) {
+            cleaned[key] = cleanObject(value)
+          }
+        }
+        return Object.keys(cleaned).length > 0 ? cleaned : undefined
+      }
+      return obj
+    }
+    
+    return cleanObject(mapped) || {}
   }
   
   // Debounced update effect
@@ -63,7 +100,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
 
   const { toast } = useToast()
 
-  // Check project access on mount
+  // Enhanced access check with user role detection
   useEffect(() => {
     const checkAccess = async () => {
       if (!projectId) return
@@ -72,24 +109,72 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       logAction('ACCESS_CHECK_START')
       
       try {
+        // Get user info first
+        const { data: user } = await supabase.auth.getUser()
+        if (!user.user) {
+          logAction('ACCESS_CHECK_NO_USER')
+          setHasAccess(false)
+          toast({ title: 'Authentication Required', description: 'Please log in to access projects', variant: 'destructive' })
+          return
+        }
+
+        // Check project access
         const { data, error } = await supabase.rpc('user_can_access_project', { project_uuid: projectId })
         if (error) {
           logAction('ACCESS_CHECK_ERROR', { error: error.message, code: error.code })
-          throw error
+          throw new Error(`RPC Error: ${error.message}`)
+        }
+        
+        // Determine user role
+        let userRole = 'unknown'
+        if (data) {
+          const { data: project } = await supabase
+            .from('projects')
+            .select('owner_id')
+            .eq('id', projectId)
+            .maybeSingle()
+          
+          if (project?.owner_id === user.user.id) {
+            userRole = 'owner'
+          } else {
+            const { data: collab } = await supabase
+              .from('project_collaborators')
+              .select('role')
+              .eq('project_id', projectId)
+              .eq('user_id', user.user.id)
+              .eq('accepted_at', 'IS NOT NULL')
+              .maybeSingle()
+            userRole = collab?.role || 'collaborator'
+          }
         }
         
         const duration = Date.now() - startTime
         setHasAccess(!!data)
-        logAction('ACCESS_CHECK_SUCCESS', { hasAccess: !!data, duration })
+        logAction('ACCESS_CHECK_SUCCESS', { 
+          hasAccess: !!data, 
+          duration, 
+          userRole,
+          userId: user.user.id,
+          userEmail: user.user.email 
+        })
         
         if (!data) {
-          toast({ title: 'Access Denied', description: 'You do not have permission to view this project.', variant: 'destructive' })
+          toast({ 
+            title: 'Access Denied', 
+            description: 'You do not have permission to view this project.',
+            variant: 'destructive' 
+          })
         }
       } catch (error) {
         const duration = Date.now() - startTime
-        logAction('ACCESS_CHECK_FAILED', { error: error instanceof Error ? error.message : 'Unknown error', duration })
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+        logAction('ACCESS_CHECK_FAILED', { error: errorMsg, duration })
         setHasAccess(false)
-        toast({ title: 'Access Check Failed', description: 'Could not verify project permissions', variant: 'destructive' })
+        toast({ 
+          title: 'Access Check Failed', 
+          description: `Could not verify project permissions: ${errorMsg}`,
+          variant: 'destructive' 
+        })
       }
     }
     checkAccess()
@@ -124,20 +209,23 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   const issues = useMemo(() => validateData(previewData), [previewData])
 
   const generateMarkdown = (data: Partial<ProjectData>): string => {
+    const cleanData = mapDataForTemplate(data)
+    logAction('MARKDOWN_GENERATION_START', { cleanDataSize: JSON.stringify(cleanData).length })
+    
     let md = `# BIM Execution Plan\n\n`
 
-    if (data.project_overview) {
+    if (cleanData.project_overview) {
       md += `## Project Overview\n\n`
-      const po = data.project_overview
-      if (po.project_name) md += `**Project Name:** ${po.project_name}\n`
-      if (po.location) md += `**Location:** ${po.location}\n`
-      if (po.client_name) md += `**Client:** ${po.client_name}\n`
-      if (po.project_type) md += `**Project Type:** ${po.project_type}\n\n`
+      const po = cleanData.project_overview
+      if (po.project_name) md += `**Project Name:** ${safeMap(po.project_name)}\n`
+      if (po.location) md += `**Location:** ${safeMap(po.location)}\n`
+      if (po.client_name) md += `**Client:** ${safeMap(po.client_name)}\n`
+      if (po.project_type) md += `**Project Type:** ${safeMap(po.project_type)}\n\n`
       if (po.key_milestones?.length) {
         md += `### Key Milestones\n\n`
         po.key_milestones.forEach(m => {
-          const parts = [m.name, m.date].filter(Boolean).join(' - ')
-          if (parts) md += `- ${parts}${m.description ? `: ${m.description}` : ''}\n`
+          const parts = [safeMap(m.name), safeMap(m.date)].filter(p => p !== '').join(' - ')
+          if (parts) md += `- ${parts}${m.description ? `: ${safeMap(m.description)}` : ''}\n`
         })
         md += `\n`
       }
@@ -240,6 +328,11 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   const refreshPreview = useCallback(async (retry = false) => {
     if (!hasAccess && projectId) {
       logAction('REFRESH_BLOCKED', { reason: 'no_access' })
+      toast({ 
+        title: 'Access Required', 
+        description: 'You need permission to refresh this project preview',
+        variant: 'destructive' 
+      })
       return
     }
     
@@ -248,36 +341,54 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
     setIsRefreshing(true)
     
     try {
-      if (onSave) await onSave()
+      // Save first if possible
+      if (onSave) {
+        logAction('REFRESH_SAVING')
+        await onSave()
+      }
+      
       let latest = baseData
       
       if (projectId) {
-        // Add timeout for large projects
+        logAction('REFRESH_FETCHING_DB')
+        // Enhanced timeout and error handling
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 10000)
+          setTimeout(() => reject(new Error('Database request timeout after 10 seconds')), 10000)
         )
+        
         const dataPromise = supabase
           .from('projects')
-          .select('project_data,id,name,owner_id')
+          .select('project_data,id,name,owner_id,status,updated_at')
           .eq('id', projectId)
           .maybeSingle()
         
         const { data, error } = await Promise.race([dataPromise, timeoutPromise]) as any
+        
         if (error) {
-          logAction('REFRESH_DB_ERROR', { error: error.message, code: error.code })
-          throw error
+          const enhancedError = `Database error: ${error.message}${error.code ? ` (${error.code})` : ''}`
+          logAction('REFRESH_DB_ERROR', { 
+            error: error.message, 
+            code: error.code,
+            hint: error.hint,
+            details: error.details 
+          })
+          throw new Error(enhancedError)
         }
         
         if (!data) {
           logAction('REFRESH_NO_DATA', { projectId })
-          throw new Error('Project not found')
+          throw new Error(`Project with ID ${projectId} not found or no access`)
         }
         
         latest = (data?.project_data as Partial<ProjectData>) || {}
+        const dataValid = Object.keys(latest).length > 0
+        
         logAction('REFRESH_DATA_LOADED', { 
           dataSize: JSON.stringify(latest).length, 
-          hasProjectData: Object.keys(latest).length > 0,
-          projectName: data.name 
+          hasProjectData: dataValid,
+          projectName: data.name,
+          projectStatus: data.status,
+          lastUpdated: data.updated_at
         })
       }
       
@@ -285,36 +396,49 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       setRetryCount(0)
       
       const duration = Date.now() - startTime
-      logAction('REFRESH_SUCCESS', { duration, dataValid: Object.keys(latest).length > 0 })
+      const dataValid = Object.keys(latest).length > 0
+      logAction('REFRESH_SUCCESS', { duration, dataValid })
       
-      if (Object.keys(latest).length === 0) {
+      if (!dataValid) {
         toast({ 
-          title: 'No project data', 
-          description: 'Please fill out the BEP form first to generate a preview.' 
+          title: 'No project data found', 
+          description: 'Please fill out the BEP form first to generate a preview.',
+          variant: 'default'
         })
       } else {
-        toast({ title: 'Preview updated', description: 'Preview reflects latest saved data.' })
+        toast({ 
+          title: 'Preview updated successfully', 
+          description: `Loaded ${Object.keys(latest).length} data sections`
+        })
       }
     } catch (error) {
       const duration = Date.now() - startTime
       const errorMsg = error instanceof Error ? error.message : 'Unknown error'
       logAction('REFRESH_ERROR', { error: errorMsg, duration, retry, retryCount })
       
+      // Enhanced retry logic with exponential backoff
       if (!retry && retryCount < 2) {
+        const delay = Math.pow(2, retryCount) * 1000 // 1s, 2s, 4s
         setRetryCount(prev => prev + 1)
         toast({ 
-          title: 'Retrying...', 
-          description: `Refresh failed, retrying (${retryCount + 1}/3)...` 
+          title: `Retrying in ${delay/1000}s...`, 
+          description: `Attempt ${retryCount + 1}/3: ${errorMsg.substring(0, 50)}${errorMsg.length > 50 ? '...' : ''}` 
         })
-        setTimeout(() => refreshPreview(true), 1000)
+        setTimeout(() => refreshPreview(true), delay)
         return
       }
       
+      // Final failure with actionable message
+      const isTimeout = errorMsg.includes('timeout')
+      const isPermission = errorMsg.includes('access') || errorMsg.includes('permission')
+      
       toast({ 
         title: 'Preview refresh failed', 
-        description: errorMsg === 'Request timeout' 
-          ? 'Request timed out. Try again for large projects.' 
-          : `Could not refresh preview: ${errorMsg}`,
+        description: isTimeout 
+          ? 'Request timed out. Check your connection and try again.' 
+          : isPermission 
+          ? 'Permission denied. Contact project owner.'
+          : `Error: ${errorMsg}. Please try again.`,
         variant: 'destructive' 
       })
     } finally {
@@ -325,7 +449,11 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   const generatePDF = async () => {
     if (!hasAccess && projectId) {
       logAction('PDF_BLOCKED', { reason: 'no_access' })
-      toast({ title: 'Access Denied', description: 'You do not have permission to export this project.', variant: 'destructive' })
+      toast({ 
+        title: 'Access Denied', 
+        description: 'You do not have permission to export this project.',
+        variant: 'destructive' 
+      })
       return
     }
 
@@ -335,7 +463,11 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
     const exportStartedAt = new Date()
     
     try {
-      if (onSave) await onSave()
+      // Save current state first
+      if (onSave) {
+        logAction('PDF_SAVING_FIRST')
+        await onSave()
+      }
 
       // Fetch freshest data from DB to avoid stale content
       let exportData: Partial<ProjectData> = previewData
@@ -344,23 +476,30 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       if (projectId) {
         logAction('PDF_FETCHING_DATA')
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Export timeout')), 15000)
+          setTimeout(() => reject(new Error('PDF export timeout after 15 seconds')), 15000)
         )
+        
         const dataPromise = supabase
           .from('projects')
-          .select('project_data,id,name,owner_id')
+          .select('project_data,id,name,owner_id,status')
           .eq('id', projectId)
           .maybeSingle()
         
         const { data, error } = await Promise.race([dataPromise, timeoutPromise]) as any
+        
         if (error) {
-          logAction('PDF_DB_ERROR', { error: error.message, code: error.code })
-          throw new Error(`Database error: ${error.message}`)
+          const enhancedError = `Database error: ${error.message}${error.code ? ` (${error.code})` : ''}`
+          logAction('PDF_DB_ERROR', { 
+            error: error.message, 
+            code: error.code,
+            hint: error.hint 
+          })
+          throw new Error(enhancedError)
         }
         
         if (!data) {
-          logAction('PDF_NO_PROJECT')
-          throw new Error('Project not found')
+          logAction('PDF_NO_PROJECT', { projectId })
+          throw new Error(`Project with ID ${projectId} not found`)
         }
         
         exportData = (data?.project_data as Partial<ProjectData>) || {}
@@ -369,19 +508,33 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
         logAction('PDF_DATA_LOADED', { 
           dataSize: JSON.stringify(exportData).length,
           hasData: Object.keys(exportData).length > 0,
-          projectName 
+          projectName,
+          projectStatus: data.status
         })
       }
 
+      // Enhanced validation with detailed logging
       const currentIssues = validateData(exportData)
-      if (currentIssues.length) {
-        logAction('PDF_VALIDATION_FAILED', { issueCount: currentIssues.length })
-        const list = currentIssues.slice(0, 5).map(i => `${i.section}: ${i.message}`).join(' • ')
-        toast({ title: 'Missing required fields', description: list, variant: 'destructive' })
+      if (currentIssues.length > 0) {
+        logAction('PDF_VALIDATION_FAILED', { 
+          issueCount: currentIssues.length,
+          criticalIssues: currentIssues.slice(0, 3)
+        })
+        
+        const criticalList = currentIssues.slice(0, 3).map(i => `${i.section}: ${i.message}`).join(' • ')
+        const additionalCount = currentIssues.length > 3 ? ` and ${currentIssues.length - 3} more` : ''
+        
+        toast({ 
+          title: 'Cannot generate PDF', 
+          description: `${criticalList}${additionalCount}. Please complete the BEP form.`,
+          variant: 'destructive' 
+        })
         return
       }
       
-      logAction('PDF_GENERATING')
+      // Clean data for PDF template
+      const cleanExportData = mapDataForTemplate(exportData)
+      logAction('PDF_GENERATING', { cleanDataKeys: Object.keys(cleanExportData) })
 
       const pdf = new jsPDF()
       const pageWidth = pdf.internal.pageSize.getWidth()
@@ -597,9 +750,9 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
         })
       }
 
-      // Footer on all pages and save
+      // Footer on all pages and generate PDF blob
       addFooterAllPages(pdf.getNumberOfPages())
-      const name = (exportData.project_overview?.project_name || 'Project').replace(/[^a-z0-9-_]+/gi, '_')
+      const name = (cleanExportData.project_overview?.project_name || 'Project').replace(/[^a-z0-9-_]+/gi, '_')
       const d = new Date()
       const yyyy = d.getFullYear()
       const mm = String(d.getMonth() + 1).padStart(2, '0')
@@ -607,42 +760,132 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       const HH = String(d.getHours()).padStart(2, '0')
       const MM = String(d.getMinutes()).padStart(2, '0')
       const fileName = `${name}_BEP_${yyyy}${mm}${dd}_${HH}${MM}.pdf`
-      pdf.save(fileName)
+      
+      logAction('PDF_SAVING_FILE', { fileName, pages: pdf.getNumberOfPages() })
+      
+      // Generate and download PDF blob with proper MIME type
+      try {
+        const pdfBlob = pdf.output('blob') as Blob
+        const url = URL.createObjectURL(pdfBlob)
+        
+        // Create download link
+        const link = document.createElement('a')
+        link.href = url
+        link.download = fileName
+        link.style.display = 'none'
+        document.body.appendChild(link)
+        link.click()
+        
+        // Cleanup
+        setTimeout(() => {
+          document.body.removeChild(link)
+          URL.revokeObjectURL(url)
+        }, 100)
+        
+        logAction('PDF_DOWNLOAD_SUCCESS', { fileName, blobSize: pdfBlob.size })
+      } catch (blobError) {
+        logAction('PDF_BLOB_ERROR', { error: blobError })
+        // Fallback to direct save
+        pdf.save(fileName)
+      }
 
-      // Versioning hook
+      // Enhanced versioning with error handling
       if (projectId) {
-        const { data: userRes } = await supabase.auth.getUser()
-        const userId = userRes?.user?.id
-        if (userId) {
-          const { data: latest, error: vErr } = await supabase
-            .from('project_versions')
-            .select('version_number')
-            .eq('project_id', projectId)
-            .order('version_number', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-          if (vErr) throw vErr
-          const next = (latest?.version_number || 0) + 1
-          const { error: insErr } = await supabase
-            .from('project_versions')
-            .insert({
-              project_id: projectId,
-              version_number: next,
-              project_data: exportData,
-              created_by: userId,
-              changelog: `Exported PDF v${next} • ${fileName}`
+        try {
+          const { data: userRes } = await supabase.auth.getUser()
+          const userId = userRes?.user?.id
+          
+          if (userId) {
+            logAction('PDF_CREATING_VERSION')
+            
+            const { data: latest, error: vErr } = await supabase
+              .from('project_versions')
+              .select('version_number')
+              .eq('project_id', projectId)
+              .order('version_number', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+              
+            if (vErr) {
+              logAction('PDF_VERSION_QUERY_ERROR', { error: vErr.message })
+              throw vErr
+            }
+            
+            const next = (latest?.version_number || 0) + 1
+            const { error: insErr } = await supabase
+              .from('project_versions')
+              .insert({
+                project_id: projectId,
+                version_number: next,
+                project_data: cleanExportData,
+                created_by: userId,
+                changelog: `PDF Export v${next} • ${fileName} • ${Object.keys(cleanExportData).length} sections`
+              })
+              
+            if (insErr) {
+              logAction('PDF_VERSION_INSERT_ERROR', { error: insErr.message })
+              throw insErr
+            }
+            
+            logAction('PDF_VERSION_CREATED', { version: next, fileName })
+            toast({ 
+              title: 'PDF Generated Successfully', 
+              description: `Exported as ${fileName} and saved as version v${next}` 
             })
-          if (insErr) throw insErr
-          toast({ title: 'PDF Generated', description: `Exported and recorded as version v${next}.` })
-        } else {
-          toast({ title: 'PDF Generated', description: 'Exported successfully.' })
+          } else {
+            logAction('PDF_NO_USER_FOR_VERSION')
+            toast({ 
+              title: 'PDF Generated Successfully', 
+              description: `Exported as ${fileName}` 
+            })
+          }
+        } catch (versionError) {
+          const versionErrorMsg = versionError instanceof Error ? versionError.message : 'Unknown versioning error'
+          logAction('PDF_VERSION_FAILED', { error: versionErrorMsg })
+          
+          // PDF was generated successfully, just version logging failed
+          toast({ 
+            title: 'PDF Generated', 
+            description: `Exported as ${fileName}. Version logging failed: ${versionErrorMsg}`,
+            variant: 'default'
+          })
         }
       } else {
-        toast({ title: 'PDF Generated', description: 'Exported successfully.' })
+        toast({ 
+          title: 'PDF Generated Successfully', 
+          description: `Exported as ${fileName}` 
+        })
       }
+      
+      const duration = Date.now() - startTime
+      logAction('PDF_EXPORT_SUCCESS', { fileName, duration, pages: pdf.getNumberOfPages() })
+      
     } catch (error) {
-      console.error('BEP Export Error', { projectId, error })
-      toast({ title: 'Export Failed', description: 'There was an error generating the PDF. Please try again.', variant: 'destructive' })
+      const duration = Date.now() - startTime
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+      logAction('PDF_EXPORT_FAILED', { error: errorMsg, duration })
+      
+      // Enhanced error messages for different failure modes
+      const isTimeout = errorMsg.includes('timeout')
+      const isPermission = errorMsg.includes('access') || errorMsg.includes('permission')
+      const isValidation = errorMsg.includes('validation') || errorMsg.includes('required')
+      
+      let description = 'There was an error generating the PDF. Please try again.'
+      if (isTimeout) {
+        description = 'PDF export timed out. Try again or contact support for large projects.'
+      } else if (isPermission) {
+        description = 'Permission denied. Contact the project owner.'
+      } else if (isValidation) {
+        description = 'Please complete all required fields before exporting.'
+      } else if (errorMsg.length < 100) {
+        description = `Export failed: ${errorMsg}`
+      }
+      
+      toast({ 
+        title: 'PDF Export Failed', 
+        description, 
+        variant: 'destructive' 
+      })
     } finally {
       setExporting(false)
     }
@@ -952,20 +1195,31 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       <CardHeader>
         <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <span>Preview & Export</span>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => refreshPreview()} disabled={isRefreshing || (!hasAccess && !!projectId)}>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto relative z-10">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full sm:w-auto min-h-[44px] touch-manipulation" 
+              onClick={() => refreshPreview()} 
+              disabled={isRefreshing || (!hasAccess && !!projectId)}
+            >
               <RotateCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span>Refresh Preview</span>
             </Button>
             <Dialog open={showPreview} onOpenChange={(v) => { setShowPreview(v); if (v) refreshPreview() }}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="w-full sm:w-auto" disabled={!hasAccess && !!projectId}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full sm:w-auto min-h-[44px] touch-manipulation" 
+                  disabled={!hasAccess && !!projectId}
+                >
                   <Eye className="h-4 w-4 mr-2" />
                   <span className="hidden sm:inline">Preview</span>
                   <span className="sm:hidden">Preview Document</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-5xl max-h-[85vh]">
+              <DialogContent className="max-w-5xl max-h-[85vh] mx-4">
                 <DialogHeader>
                   <DialogTitle>BEP Preview</DialogTitle>
                   <DialogDescription>
@@ -978,13 +1232,24 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
               </DialogContent>
             </Dialog>
             
-            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleCopyMarkdown} disabled={!hasAccess && !!projectId}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full sm:w-auto min-h-[44px] touch-manipulation" 
+              onClick={handleCopyMarkdown} 
+              disabled={!hasAccess && !!projectId}
+            >
               <FileText className="h-4 w-4 mr-2" />
               <span className="hidden sm:inline">Copy Markdown</span>
               <span className="sm:hidden">Copy MD</span>
             </Button>
             
-            <Button size="sm" className="w-full sm:w-auto" onClick={generatePDF} disabled={issues.length > 0 || exporting || (!hasAccess && !!projectId)}>
+            <Button 
+              size="sm" 
+              className="w-full sm:w-auto min-h-[44px] touch-manipulation" 
+              onClick={generatePDF} 
+              disabled={issues.length > 0 || exporting || (!hasAccess && !!projectId)}
+            >
               <Download className={`h-4 w-4 mr-2 ${exporting ? 'animate-pulse' : ''}`} />
               <span className="hidden sm:inline">{exporting ? 'Exporting…' : 'Export PDF'}</span>
               <span className="sm:hidden">PDF</span>
@@ -1019,20 +1284,39 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
           <p className="text-muted-foreground mb-6">
             Refresh the preview, copy Markdown, or export a PDF. PDF export is disabled until required fields are completed.
           </p>
-          <div className="flex flex-col sm:flex-row justify-center gap-2 max-w-2xl mx-auto">
-            <Button variant="outline" className="flex-1 sm:flex-none sm:min-w-[140px]" onClick={() => refreshPreview()} disabled={isRefreshing || (!hasAccess && !!projectId)}>
+          <div className="flex flex-col sm:flex-row justify-center gap-2 max-w-2xl mx-auto pb-4 relative z-10">
+            <Button 
+              variant="outline" 
+              className="flex-1 sm:flex-none sm:min-w-[140px] min-h-[44px] touch-manipulation" 
+              onClick={() => refreshPreview()} 
+              disabled={isRefreshing || (!hasAccess && !!projectId)}
+            >
               <RotateCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh Preview
             </Button>
-            <Button variant="outline" className="flex-1 sm:flex-none sm:min-w-[140px]" onClick={async () => { await refreshPreview(); setShowPreview(true) }} disabled={!hasAccess && !!projectId}>
+            <Button 
+              variant="outline" 
+              className="flex-1 sm:flex-none sm:min-w-[140px] min-h-[44px] touch-manipulation" 
+              onClick={async () => { await refreshPreview(); setShowPreview(true) }} 
+              disabled={!hasAccess && !!projectId}
+            >
               <Eye className="h-4 w-4 mr-2" />
               Preview Document
             </Button>
-            <Button variant="outline" className="flex-1 sm:flex-none sm:min-w-[140px]" onClick={handleCopyMarkdown} disabled={!hasAccess && !!projectId}>
+            <Button 
+              variant="outline" 
+              className="flex-1 sm:flex-none sm:min-w-[140px] min-h-[44px] touch-manipulation" 
+              onClick={handleCopyMarkdown} 
+              disabled={!hasAccess && !!projectId}
+            >
               <FileText className="h-4 w-4 mr-2" />
               Copy Markdown
             </Button>
-            <Button className="flex-1 sm:flex-none sm:min-w-[140px]" onClick={generatePDF} disabled={issues.length > 0 || exporting || (!hasAccess && !!projectId)}>
+            <Button 
+              className="flex-1 sm:flex-none sm:min-w-[140px] min-h-[44px] touch-manipulation" 
+              onClick={generatePDF} 
+              disabled={issues.length > 0 || exporting || (!hasAccess && !!projectId)}
+            >
               <Download className={`h-4 w-4 mr-2 ${exporting ? 'animate-pulse' : ''}`} />
               {exporting ? 'Exporting…' : 'Export PDF'}
             </Button>
