@@ -1,3 +1,4 @@
+import React from "react"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -82,6 +83,14 @@ export function SoftwareOverviewForm({ data, onUpdate }: SoftwareOverviewFormPro
   const onSubmit = (values: SoftwareOverviewFormData) => {
     onUpdate(values)
   }
+
+  // Auto-submit on field changes
+  React.useEffect(() => {
+    const subscription = form.watch((values) => {
+      onUpdate(values as SoftwareOverviewFormData)
+    })
+    return () => subscription.unsubscribe()
+  }, [form, onUpdate])
 
   const addMainTool = () => {
     appendMainTool({ name: "", version: "", discipline: "", usage: "" })

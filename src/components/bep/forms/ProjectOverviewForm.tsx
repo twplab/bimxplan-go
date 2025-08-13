@@ -1,3 +1,4 @@
+import React from "react"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -67,6 +68,14 @@ export function ProjectOverviewForm({ data, onUpdate }: ProjectOverviewFormProps
   const onSubmit = (values: ProjectOverviewFormData) => {
     onUpdate(values)
   }
+
+  // Auto-submit on field changes
+  React.useEffect(() => {
+    const subscription = form.watch((values) => {
+      onUpdate(values as ProjectOverviewFormData)
+    })
+    return () => subscription.unsubscribe()
+  }, [form, onUpdate])
 
   const addMilestone = () => {
     append({ name: "", date: "", description: "" })

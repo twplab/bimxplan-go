@@ -1,9 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = 'https://your-project.supabase.co'
-const supabaseAnonKey = 'your-anon-key'
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export { supabase } from '@/integrations/supabase/client'
 
 export type BIMProject = {
   id: string

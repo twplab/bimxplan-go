@@ -1,3 +1,4 @@
+import React from "react"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -57,6 +58,14 @@ export function TeamResponsibilitiesForm({ data, onUpdate }: TeamResponsibilitie
   const onSubmit = (values: TeamResponsibilitiesFormData) => {
     onUpdate(values)
   }
+
+  // Auto-submit on field changes
+  React.useEffect(() => {
+    const subscription = form.watch((values) => {
+      onUpdate(values as TeamResponsibilitiesFormData)
+    })
+    return () => subscription.unsubscribe()
+  }, [form, onUpdate])
 
   const addFirm = () => {
     append({ name: "", discipline: "", bim_lead: "", contact_info: "" })

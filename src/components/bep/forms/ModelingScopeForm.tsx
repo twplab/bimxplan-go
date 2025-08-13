@@ -1,3 +1,4 @@
+import React from "react"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -65,6 +66,14 @@ export function ModelingScopeForm({ data, onUpdate }: ModelingScopeFormProps) {
   const onSubmit = (values: ModelingScopeFormData) => {
     onUpdate(values)
   }
+
+  // Auto-submit on field changes
+  React.useEffect(() => {
+    const subscription = form.watch((values) => {
+      onUpdate(values as ModelingScopeFormData)
+    })
+    return () => subscription.unsubscribe()
+  }, [form, onUpdate])
 
   return (
     <Form {...form}>
