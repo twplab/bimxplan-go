@@ -231,7 +231,32 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
 
       // Helpers
       const lineHeight = 5
+      // Load logo once for header (optional)
+      const getImageDataUrl = async (url: string): Promise<string | null> => {
+        try {
+          const res = await fetch(url)
+          const blob = await res.blob()
+          return await new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.onerror = () => resolve(null)
+            reader.readAsDataURL(blob)
+          })
+        } catch {
+          return null
+        }
+      }
+      const logoDataUrl = await getImageDataUrl(logoUrl)
+
       const addHeader = (first = false) => {
+        // Header: logo + title + divider
+        if (logoDataUrl) {
+          try {
+            const imgH = 12
+            const imgW = 12
+            pdf.addImage(logoDataUrl, 'PNG', pageWidth - margin - imgW, 8, imgW, imgH)
+          } catch {}
+        }
         pdf.setFontSize(12)
         pdf.setFont(undefined, 'bold')
         pdf.text('BIMxPlan Go – BIM Execution Plan', margin, 12)
@@ -414,7 +439,14 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
 
       // Footer on all pages and save
       addFooterAllPages(pdf.getNumberOfPages())
-      const fileName = `BEP_${exportData.project_overview?.project_name || 'Project'}_${new Date().toISOString().split('T')[0]}.pdf`
+      const name = (exportData.project_overview?.project_name || 'Project').replace(/[^a-z0-9-_]+/gi, '_')
+      const d = new Date()
+      const yyyy = d.getFullYear()
+      const mm = String(d.getMonth() + 1).padStart(2, '0')
+      const dd = String(d.getDate()).padStart(2, '0')
+      const HH = String(d.getHours()).padStart(2, '0')
+      const MM = String(d.getMinutes()).padStart(2, '0')
+      const fileName = `${name}_BEP_${yyyy}${mm}${dd}_${HH}${MM}.pdf`
       pdf.save(fileName)
 
       // Versioning hook
@@ -438,7 +470,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
               version_number: next,
               project_data: exportData,
               created_by: userId,
-              changelog: `Exported PDF v${next}`
+              changelog: `Exported PDF v${next} • ${fileName}`
             })
           if (insErr) throw insErr
           toast({ title: 'PDF Generated', description: `Exported and recorded as version v${next}.` })
