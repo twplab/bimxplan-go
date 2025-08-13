@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Download, FileText, Eye, Calendar, Users, Building, MapPin, RotateCw } from "lucide-react"
 import { ProjectData } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
@@ -31,8 +32,14 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([])
+  const baseData = useMemo(() => data || projectData || {}, [data, projectData])
+  const [previewData, setPreviewData] = useState<Partial<ProjectData>>(baseData)
+  
+  useEffect(() => {
+    setPreviewData(baseData)
+  }, [baseData])
+
   const { toast } = useToast()
-  const bepData = useMemo(() => data || projectData || {}, [data, projectData])
 
   const validateData = (d: Partial<ProjectData>): ValidationIssue[] => {
     const issues: ValidationIssue[] = []
@@ -51,7 +58,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
     return issues
   }
 
-  const issues = useMemo(() => validateData(bepData), [bepData])
+  const issues = useMemo(() => validateData(previewData), [previewData])
 
   const generateMarkdown = (data: Partial<ProjectData>): string => {
     let md = `# BIM Execution Plan\n\n`
@@ -167,113 +174,316 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
     return md
   }
 
-  const generatePDF = async () => {
+  const refreshPreview = async () => {
+    setIsRefreshing(true)
     try {
-      const pdf = new jsPDF()
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const margin = 20
-      let yPosition = margin
-
-      // Helper function to add text with line breaks
-      const addText = (text: string, fontSize = 12, isBold = false) => {
-        pdf.setFontSize(fontSize)
-        if (isBold) {
-          pdf.setFont(undefined, 'bold')
-        } else {
-          pdf.setFont(undefined, 'normal')
-        }
-        
-        const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin)
-        lines.forEach((line: string) => {
-          if (yPosition > pdf.internal.pageSize.getHeight() - margin) {
-            pdf.addPage()
-            yPosition = margin
-          }
-          pdf.text(line, margin, yPosition)
-          yPosition += fontSize * 0.4
-        })
-        yPosition += 5
+      if (onSave) await onSave()
+      let latest = baseData
+      if (projectId) {
+        const { data, error } = await supabase
+          .from('projects')
+          .select('project_data,id,name')
+          .eq('id', projectId)
+          .maybeSingle()
+        if (error) throw error
+        latest = (data?.project_data as Partial<ProjectData>) || latest
       }
-
-      // Title
-      addText('BIM Execution Plan', 20, true)
-      yPosition += 10
-
-      // Project Overview
-      if (bepData.project_overview) {
-        addText('Project Overview', 16, true)
-        addText(`Project: ${bepData.project_overview.project_name || 'N/A'}`)
-        addText(`Location: ${bepData.project_overview.location || 'N/A'}`)
-        addText(`Client: ${bepData.project_overview.client_name || 'N/A'}`)
-        addText(`Type: ${bepData.project_overview.project_type || 'N/A'}`)
-        yPosition += 10
-      }
-
-      // Add other sections similarly...
-      if (bepData.team_responsibilities?.firms?.length) {
-        addText('Team & Responsibilities', 16, true)
-        bepData.team_responsibilities.firms.forEach(firm => {
-          addText(`${firm.name} (${firm.discipline})`, 12, true)
-          addText(`BIM Lead: ${firm.bim_lead}`)
-          addText(`Contact: ${firm.contact_info}`)
-        })
-        yPosition += 10
-      }
-
-      // Footer
-      addText(`Generated on ${new Date().toLocaleDateString()}`, 10)
-
-      pdf.save(`BEP_${bepData.project_overview?.project_name || 'Project'}_${new Date().toISOString().split('T')[0]}.pdf`)
-      
-      toast({
-        title: "PDF Generated",
-        description: "Your BEP has been exported as PDF successfully.",
-      })
+      setPreviewData(latest)
+      toast({ title: 'Preview updated', description: 'Preview reflects latest saved data.' })
     } catch (error) {
-      console.error('Error generating PDF:', error)
-      toast({
-        title: "Export Failed",
-        description: "There was an error generating the PDF. Please try again.",
-        variant: "destructive",
-      })
+      console.error('Preview refresh error', { projectId, error })
+      toast({ title: 'Preview refresh failed', description: 'Could not refresh preview. Try again.', variant: 'destructive' })
+    } finally {
+      setIsRefreshing(false)
     }
   }
 
-  const handleExportMarkdown = () => {
-    const markdown = generateMarkdown(bepData)
-    const blob = new Blob([markdown], { type: 'text/markdown' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `BEP_${bepData.project_overview?.project_name || 'Project'}_${new Date().toISOString().split('T')[0]}.md`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-    
-    toast({
-      title: "Markdown Exported",
-      description: "Your BEP has been exported as Markdown successfully.",
-    })
+  const generatePDF = async () => {
+    setExporting(true)
+    const exportStartedAt = new Date()
+    try {
+      if (onSave) await onSave()
+
+      // Fetch freshest data from DB to avoid stale content
+      let exportData: Partial<ProjectData> = previewData
+      if (projectId) {
+        const { data, error } = await supabase
+          .from('projects')
+          .select('project_data,id,name')
+          .eq('id', projectId)
+          .maybeSingle()
+        if (error) throw error
+        exportData = (data?.project_data as Partial<ProjectData>) || exportData
+      }
+
+      const currentIssues = validateData(exportData)
+      if (currentIssues.length) {
+        const list = currentIssues.slice(0, 5).map(i => `${i.section}: ${i.message}`).join(' • ')
+        toast({ title: 'Missing required fields', description: list, variant: 'destructive' })
+        return
+      }
+
+      const pdf = new jsPDF()
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const margin = 18
+      let y = margin
+
+      // Helpers
+      const lineHeight = 5
+      const addHeader = (first = false) => {
+        pdf.setFontSize(12)
+        pdf.setFont(undefined, 'bold')
+        pdf.text('BIMxPlan Go – BIM Execution Plan', margin, 12)
+        pdf.setFont(undefined, 'normal')
+        const title = exportData.project_overview?.project_name ? `Project: ${exportData.project_overview.project_name}` : ''
+        if (title) pdf.text(title, margin, 18)
+        pdf.setDrawColor(220)
+        pdf.line(margin, 22, pageWidth - margin, 22)
+        y = 28
+      }
+      const addFooterAllPages = (totalPages: number) => {
+        for (let i = 1; i <= totalPages; i++) {
+          pdf.setPage(i)
+          pdf.setFontSize(9)
+          pdf.setTextColor(100)
+          pdf.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: 'right' })
+          const footerLeft = `${exportStartedAt.toLocaleString()}${projectId ? ` • Project ${projectId}` : ''}`
+          pdf.text(footerLeft, margin, pageHeight - 8)
+          pdf.setTextColor(0)
+        }
+      }
+      const ensureSpace = (needed = 10) => {
+        if (y + needed > pageHeight - margin) {
+          pdf.addPage()
+          addHeader()
+        }
+      }
+      const addSection = (title: string) => {
+        ensureSpace(12)
+        pdf.setFontSize(14)
+        pdf.setFont(undefined, 'bold')
+        pdf.text(title, margin, y)
+        y += 6
+        pdf.setFont(undefined, 'normal')
+      }
+      const addField = (label: string, value?: string) => {
+        if (!value) return
+        ensureSpace(lineHeight + 2)
+        pdf.setFontSize(11)
+        const text = `${label}: ${value}`
+        const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin)
+        lines.forEach((ln: string) => {
+          ensureSpace(lineHeight)
+          pdf.text(ln, margin, y)
+          y += lineHeight
+        })
+      }
+      const addBullet = (text: string) => {
+        if (!text) return
+        ensureSpace(lineHeight)
+        pdf.text(`• ${text}`, margin, y)
+        y += lineHeight
+      }
+
+      // First page header
+      addHeader(true)
+
+      // Project Overview
+      if (exportData.project_overview) {
+        addSection('Project Overview')
+        const po = exportData.project_overview
+        addField('Location', po.location)
+        addField('Client', po.client_name)
+        addField('Project Type', po.project_type)
+        if (po.key_milestones?.length) {
+          ensureSpace()
+          pdf.setFont(undefined, 'bold')
+          pdf.text('Key Milestones', margin, y)
+          y += 5
+          pdf.setFont(undefined, 'normal')
+          po.key_milestones.forEach(m => {
+            const parts = [m.name, m.date].filter(Boolean).join(' – ')
+            addBullet(`${parts}${m.description ? `: ${m.description}` : ''}`)
+          })
+        }
+      }
+
+      // Team & Responsibilities
+      if (exportData.team_responsibilities?.firms?.length) {
+        addSection('Team & Responsibilities')
+        exportData.team_responsibilities.firms.forEach(f => {
+          if (!f.name) return
+          ensureSpace()
+          pdf.setFont(undefined, 'bold')
+          pdf.text(f.name, margin, y)
+          y += 5
+          pdf.setFont(undefined, 'normal')
+          addField('Discipline', f.discipline)
+          addField('BIM Lead', f.bim_lead)
+          addField('Contact', f.contact_info)
+        })
+      }
+
+      // Software Overview
+      if (exportData.software_overview?.main_tools?.length) {
+        addSection('Software Overview – Main Tools')
+        exportData.software_overview.main_tools.forEach(t => {
+          const name = t.name ? `${t.name}${t.version ? ` (${t.version})` : ''}` : ''
+          const details = [t.discipline, t.usage].filter(Boolean).join(' – ')
+          addBullet([name, details].filter(Boolean).join(' – '))
+        })
+      }
+
+      // Modeling Scope
+      if (exportData.modeling_scope) {
+        addSection('Modeling Scope')
+        const ms = exportData.modeling_scope
+        addField('General LOD', ms.general_lod)
+        addField('Units', ms.units)
+        addField('Levels/Grids Strategy', ms.levels_grids_strategy)
+        if (ms.discipline_lods?.length) {
+          ensureSpace()
+          pdf.setFont(undefined, 'bold')
+          pdf.text('Discipline-Specific LODs', margin, y)
+          y += 5
+          pdf.setFont(undefined, 'normal')
+          ms.discipline_lods.forEach(l => {
+            const parts = [l.discipline, l.lod_level].filter(Boolean).join(': ')
+            addBullet(`${parts}${l.description ? ` – ${l.description}` : ''}`)
+          })
+        }
+      }
+
+      // File Naming
+      if (exportData.file_naming) {
+        addSection('File Naming Convention')
+        const fn = exportData.file_naming
+        addField('Use Standard Conventions', typeof fn.use_conventions === 'boolean' ? (fn.use_conventions ? 'Yes' : 'No') : undefined)
+        addField('Prefix Format', fn.prefix_format)
+        addField('Discipline Codes', fn.discipline_codes)
+        addField('Versioning Format', fn.versioning_format)
+      }
+
+      // Collaboration & CDE
+      if (exportData.collaboration_cde) {
+        addSection('Collaboration & Common Data Environment')
+        const cde = exportData.collaboration_cde
+        addField('Platform', cde.platform)
+        addField('File Linking Method', cde.file_linking_method)
+        addField('Sharing Frequency', cde.sharing_frequency)
+        addField('Setup Responsibility', cde.setup_responsibility)
+      }
+
+      // Geolocation
+      if (exportData.geolocation) {
+        addSection('Geolocation & Coordinate System')
+        const geo = exportData.geolocation
+        addField('Georeferenced', typeof geo.is_georeferenced === 'boolean' ? (geo.is_georeferenced ? 'Yes' : 'No') : undefined)
+        if (geo.is_georeferenced) {
+          addField('Coordinate Setup', geo.coordinate_setup)
+          addField('Origin Location', geo.origin_location)
+          addField('Coordinate System', geo.coordinate_system)
+        }
+      }
+
+      // Model Checking
+      if (exportData.model_checking) {
+        addSection('Model Checking & Coordination')
+        const mc = exportData.model_checking
+        if (mc.clash_detection_tools?.length) addField('Clash Detection Tools', mc.clash_detection_tools.join(', '))
+        addField('Coordination Process', mc.coordination_process)
+        addField('Meeting Frequency', mc.meeting_frequency)
+      }
+
+      // Outputs & Deliverables
+      if (exportData.outputs_deliverables?.deliverables_by_phase?.length) {
+        addSection('Outputs & Deliverables – By Phase')
+        exportData.outputs_deliverables.deliverables_by_phase.forEach(p => {
+          if (!p.phase) return
+          ensureSpace()
+          pdf.setFont(undefined, 'bold')
+          pdf.text(p.phase, margin, y)
+          y += 5
+          pdf.setFont(undefined, 'normal')
+          if (p.deliverables?.length) addField('Deliverables', p.deliverables.join(', '))
+          if (p.formats?.length) addField('Formats', p.formats.join(', '))
+          addField('Responsibility', p.responsibility)
+        })
+      }
+
+      // Footer on all pages and save
+      addFooterAllPages(pdf.getNumberOfPages())
+      const fileName = `BEP_${exportData.project_overview?.project_name || 'Project'}_${new Date().toISOString().split('T')[0]}.pdf`
+      pdf.save(fileName)
+
+      // Versioning hook
+      if (projectId) {
+        const { data: userRes } = await supabase.auth.getUser()
+        const userId = userRes?.user?.id
+        if (userId) {
+          const { data: latest, error: vErr } = await supabase
+            .from('project_versions')
+            .select('version_number')
+            .eq('project_id', projectId)
+            .order('version_number', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (vErr) throw vErr
+          const next = (latest?.version_number || 0) + 1
+          const { error: insErr } = await supabase
+            .from('project_versions')
+            .insert({
+              project_id: projectId,
+              version_number: next,
+              project_data: exportData,
+              created_by: userId,
+              changelog: `Exported PDF v${next}`
+            })
+          if (insErr) throw insErr
+          toast({ title: 'PDF Generated', description: `Exported and recorded as version v${next}.` })
+        } else {
+          toast({ title: 'PDF Generated', description: 'Exported successfully.' })
+        }
+      } else {
+        toast({ title: 'PDF Generated', description: 'Exported successfully.' })
+      }
+    } catch (error) {
+      console.error('BEP Export Error', { projectId, error })
+      toast({ title: 'Export Failed', description: 'There was an error generating the PDF. Please try again.', variant: 'destructive' })
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleCopyMarkdown = async () => {
+    try {
+      const markdown = generateMarkdown(previewData)
+      await navigator.clipboard.writeText(markdown)
+      toast({ title: 'Markdown copied', description: 'BEP content copied to clipboard.' })
+    } catch (e) {
+      console.error('Copy markdown failed', e)
+      toast({ title: 'Copy failed', description: 'Could not copy markdown. Try export PDF instead.', variant: 'destructive' })
+    }
   }
 
   const PreviewContent = () => (
     <div className="space-y-6">
       {/* Project Header */}
-      {bepData.project_overview && (
+      {previewData.project_overview && (
         <div className="text-center border-b pb-6">
-          <h1 className="text-3xl font-bold mb-2">{bepData.project_overview.project_name || 'BIM Execution Plan'}</h1>
+          <h1 className="text-3xl font-bold mb-2">{previewData.project_overview.project_name || 'BIM Execution Plan'}</h1>
           <div className="flex justify-center items-center space-x-6 text-muted-foreground">
-            {bepData.project_overview.location && (
+            {previewData.project_overview.location && (
               <div className="flex items-center">
                 <MapPin className="h-4 w-4 mr-1" />
-                {bepData.project_overview.location}
+                {previewData.project_overview.location}
               </div>
             )}
-            {bepData.project_overview.client_name && (
+            {previewData.project_overview.client_name && (
               <div className="flex items-center">
                 <Building className="h-4 w-4 mr-1" />
-                {bepData.project_overview.client_name}
+                {previewData.project_overview.client_name}
               </div>
             )}
             <div className="flex items-center">
@@ -285,7 +495,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       )}
 
       {/* Project Overview */}
-      {bepData.project_overview && (
+      {previewData.project_overview && (
         <section>
           <h2 className="text-xl font-semibold mb-4 flex items-center">
             <Building className="h-5 w-5 mr-2" />
@@ -293,14 +503,14 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
           </h2>
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <strong>Project Type:</strong> {bepData.project_overview.project_type || 'N/A'}
+              <strong>Project Type:</strong> {previewData.project_overview.project_type || 'N/A'}
             </div>
           </div>
-          {bepData.project_overview.key_milestones?.length > 0 && (
+          {previewData.project_overview.key_milestones?.length > 0 && (
             <div>
               <h3 className="font-medium mb-2">Key Milestones</h3>
               <div className="space-y-2">
-                {bepData.project_overview.key_milestones.map((milestone, index) => (
+                {previewData.project_overview.key_milestones.map((milestone, index) => (
                   <div key={index} className="flex justify-between items-center p-2 bg-muted rounded">
                     <span className="font-medium">{milestone.name}</span>
                     <Badge variant="outline">{milestone.date}</Badge>
@@ -313,14 +523,14 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       )}
 
       {/* Team & Responsibilities */}
-      {bepData.team_responsibilities?.firms?.length > 0 && (
+      {previewData.team_responsibilities?.firms?.length > 0 && (
         <section>
           <h2 className="text-xl font-semibold mb-4 flex items-center">
             <Users className="h-5 w-5 mr-2" />
             Team & Responsibilities
           </h2>
           <div className="grid gap-4">
-            {bepData.team_responsibilities.firms.map((firm, index) => (
+            {previewData.team_responsibilities.firms.map((firm, index) => (
               <Card key={index}>
                 <CardContent className="pt-4">
                   <div className="flex justify-between items-start mb-2">
