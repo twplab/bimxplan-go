@@ -12,6 +12,9 @@ import { supabase } from "@/integrations/supabase/client"
 import logoUrl from "@/assets/bimxplan-logo.png"
 import { BEPDiagnostics } from "./BEPDiagnostics"
 import { BEPTestResults } from "./BEPTestResults"
+import { getBepExportData, ensureLatestSave, BEPExportData } from "./BEPDataCollector"
+import { mapProjectDataToPdfModel, PdfModel } from "./BEPPdfMapper"
+import { renderPdfFromModel, generatePdfFilename, createVersionEntry } from "./BEPPdfRenderer"
 
 interface ValidationIssue {
   section: string
@@ -34,6 +37,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   const [retryCount, setRetryCount] = useState(0)
   const baseData = useMemo(() => data || projectData || {}, [data, projectData])
   const [previewData, setPreviewData] = useState<Partial<ProjectData>>(baseData)
+  const [exportData, setExportData] = useState<BEPExportData | null>(null)
   const { toast } = useToast()
   
   // Enhanced logging function
@@ -91,74 +95,58 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
 
   const issues = useMemo(() => validateData(previewData), [validateData, previewData])
 
-  // Enhanced refresh function
+  // Enhanced refresh function with single source of truth
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing) return
+    if (isRefreshing || !projectId) return
     
     setIsRefreshing(true)
     try {
       logAction('REFRESH_START', { retry: retryCount > 0, attempt: retryCount + 1 })
-      
-      // Check access first
-      if (projectId) {
-        logAction('ACCESS_CHECK_START')
-        const { data: hasProjectAccess, error: accessError } = await supabase
-          .rpc('user_can_access_project', { project_uuid: projectId })
-        
-        if (accessError) {
-          logAction('ACCESS_CHECK_ERROR', { error: accessError.message })
-          throw new Error(`Access check failed: ${accessError.message}`)
-        }
-        
-        if (!hasProjectAccess) {
-          logAction('ACCESS_CHECK_DENIED')
-          setHasAccess(false)
-          throw new Error('You do not have access to this project')
-        }
-        
-        logAction('ACCESS_CHECK_SUCCESS')
-        setHasAccess(true)
-      }
       
       // Save current data first if onSave is available
       if (onSave) {
         logAction('REFRESH_SAVING')
         await onSave()
       }
+
+      // Use single source of truth for data collection
+      logAction('REFRESH_FETCHING_UNIFIED_DATA')
+      const freshExportData = await getBepExportData(projectId)
       
-      // Fetch fresh data from database
-      if (projectId) {
-        logAction('REFRESH_FETCHING_DB')
-        const { data: freshProject, error: fetchError } = await supabase
-          .from('projects')
-          .select('*')
-          .eq('id', projectId)
-          .single()
-        
-        if (fetchError) {
-          logAction('REFRESH_FETCH_ERROR', { error: fetchError.message })
-          throw new Error(`Failed to fetch project: ${fetchError.message}`)
-        }
-        
-        logAction('REFRESH_DATA_LOADED', {
-          dataSize: JSON.stringify(freshProject?.project_data || {}).length,
-          hasProjectData: !!freshProject?.project_data,
-          projectName: freshProject?.name,
-          projectStatus: freshProject?.status,
-          lastUpdated: freshProject?.updated_at
-        })
-        
-        if (freshProject?.project_data) {
-          setPreviewData(freshProject.project_data as Partial<ProjectData>)
-        }
+      logAction('REFRESH_DATA_LOADED', {
+        dataSize: JSON.stringify(freshExportData).length,
+        sectionsFound: Object.keys(freshExportData.sections).length,
+        lastUpdated: freshExportData.lastUpdated
+      })
+      
+      // Update both preview data and export data
+      setExportData(freshExportData)
+      
+      // Convert export data back to preview format for compatibility
+      const previewCompatibleData: Partial<ProjectData> = {
+        project_overview: freshExportData.sections.overview,
+        team_responsibilities: freshExportData.sections.team,
+        software_overview: freshExportData.sections.software,
+        modeling_scope: freshExportData.sections.modeling,
+        file_naming: freshExportData.sections.naming,
+        collaboration_cde: freshExportData.sections.collaboration,
+        geolocation: freshExportData.sections.geolocation,
+        model_checking: freshExportData.sections.checking,
+        outputs_deliverables: freshExportData.sections.outputs
       }
       
+      setPreviewData(previewCompatibleData)
+      setHasAccess(true)
       setRetryCount(0)
       logAction('REFRESH_SUCCESS')
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       logAction('REFRESH_ERROR', { error: errorMessage, retryCount })
+      
+      if (errorMessage.includes('access')) {
+        setHasAccess(false)
+      }
       
       if (retryCount < 3) {
         setRetryCount(prev => prev + 1)
@@ -175,157 +163,45 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
     }
   }, [isRefreshing, retryCount, projectId, onSave, logAction, toast])
 
-  // Enhanced PDF generation
+  // Enhanced PDF generation with single source of truth
   const generateComprehensivePDF = useCallback(async () => {
-    if (exporting) return
+    if (exporting || !projectId) return
     
     setExporting(true)
     try {
       const startTime = Date.now()
-      logAction('PDF_EXPORT_START', { dataSize: JSON.stringify(previewData).length })
+      logAction('PDF_EXPORT_START')
       
-      // Create PDF with jsPDF
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      })
-      
-      let yPosition = 20
-      const pageHeight = pdf.internal.pageSize.height
-      const margin = 20
-      
-      // Helper function to add new page if needed
-      const checkPageBreak = (requiredHeight: number) => {
-        if (yPosition + requiredHeight > pageHeight - margin) {
-          pdf.addPage()
-          yPosition = margin
-          return true
-        }
-        return false
+      // Step 1: Ensure latest save (flush any pending changes)
+      if (onSave) {
+        logAction('PDF_ENSURE_SAVE')
+        await ensureLatestSave(projectId, previewData)
       }
       
-      // Helper function to safely get text
-      const safeText = (text: any, fallback = 'Not specified') => {
-        if (text === null || text === undefined || text === '') return fallback
-        if (typeof text === 'boolean') return text ? 'Yes' : 'No'
-        if (Array.isArray(text)) return text.length > 0 ? text.join(', ') : fallback
-        return String(text)
-      }
+      // Step 2: Collect fresh data using single source of truth
+      logAction('PDF_COLLECT_DATA')
+      const freshExportData = await getBepExportData(projectId)
       
-      // PDF Header
-      pdf.setFontSize(24)
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('BIM Execution Plan', margin, yPosition)
+      // Step 3: Map to clean PDF model
+      logAction('PDF_MAP_DATA')
+      const pdfModel = mapProjectDataToPdfModel(freshExportData)
       
-      pdf.setFontSize(12)
-      pdf.setFont('helvetica', 'normal')
-      pdf.text(`Generated: ${new Date().toLocaleDateString()}`, margin, yPosition + 8)
+      // Step 4: Generate PDF using mapped model
+      logAction('PDF_RENDER_START')
+      const pdf = await renderPdfFromModel(pdfModel, projectId)
       
-      yPosition = 40
-      
-      // Project Overview Section
-      checkPageBreak(40)
-      pdf.setFontSize(16)
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('1. Project Overview', margin, yPosition)
-      yPosition += 10
-      
-      pdf.setFontSize(10)
-      pdf.setFont('helvetica', 'normal')
-      
-      const overview = previewData.project_overview
-      pdf.text(`Project Name: ${safeText(overview?.project_name)}`, margin, yPosition)
-      yPosition += 6
-      pdf.text(`Client: ${safeText(overview?.client_name)}`, margin, yPosition)
-      yPosition += 6
-      pdf.text(`Location: ${safeText(overview?.location)}`, margin, yPosition)
-      yPosition += 6
-      pdf.text(`Project Type: ${safeText(overview?.project_type)}`, margin, yPosition)
-      yPosition += 15
-      
-      // Team & Responsibilities Section
-      checkPageBreak(30)
-      pdf.setFontSize(16)
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('2. Team & Responsibilities', margin, yPosition)
-      yPosition += 10
-      
-      const team = previewData.team_responsibilities
-      if (team?.firms && team.firms.length > 0) {
-        pdf.setFontSize(10)
-        pdf.setFont('helvetica', 'normal')
-        team.firms.forEach((firm: any, index: number) => {
-          checkPageBreak(20)
-          pdf.text(`Firm ${index + 1}: ${safeText(firm.name)}`, margin, yPosition)
-          yPosition += 5
-          pdf.text(`  Discipline: ${safeText(firm.discipline)}`, margin + 5, yPosition)
-          yPosition += 5
-          pdf.text(`  BIM Lead: ${safeText(firm.bim_lead)}`, margin + 5, yPosition)
-          yPosition += 5
-          pdf.text(`  Contact: ${safeText(firm.contact_info)}`, margin + 5, yPosition)
-          yPosition += 8
-        })
-      }
-      yPosition += 10
-      
-      // Software Overview Section
-      checkPageBreak(30)
-      pdf.setFontSize(16)
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('3. Software Overview', margin, yPosition)
-      yPosition += 10
-      
-      const software = previewData.software_overview
-      if (software?.main_tools && software.main_tools.length > 0) {
-        pdf.setFontSize(10)
-        pdf.setFont('helvetica', 'normal')
-        software.main_tools.forEach((tool: any) => {
-          checkPageBreak(6)
-          pdf.text(`• ${safeText(tool.name)} ${safeText(tool.version)} - ${safeText(tool.discipline)}`, margin, yPosition)
-          yPosition += 6
-        })
-      }
-      yPosition += 15
-      
-      // Additional sections can be added here following the same pattern
-      
-      // Generate filename
-      const projectName = overview?.project_name || 'BEP_Project'
-      const timestamp = new Date().toISOString().slice(0, 16).replace(/[:\-T]/g, '_')
-      const filename = `${projectName.replace(/[^a-zA-Z0-9]/g, '_')}_BEP_Summary_${timestamp}.pdf`
-      
-      // Download PDF
+      // Step 5: Download PDF
+      const filename = generatePdfFilename(pdfModel.header.projectName)
       pdf.save(filename)
       
-      // Create version entry if projectId exists
-      if (projectId) {
-        try {
-          logAction('VERSION_CREATE_START')
-          const { error: versionError } = await supabase
-            .from('project_versions')
-            .insert({
-              project_id: projectId,
-              version_number: Math.floor(Date.now() / 1000),
-              project_data: previewData,
-              changelog: `BEP PDF Export: ${filename}`,
-              created_by: (await supabase.auth.getUser()).data.user?.id
-            })
-          
-          if (versionError) {
-            logAction('VERSION_CREATE_ERROR', { error: versionError.message })
-          } else {
-            logAction('VERSION_CREATE_SUCCESS')
-          }
-        } catch (versionErr) {
-          logAction('VERSION_CREATE_ERROR', { error: versionErr.message })
-        }
-      }
+      // Step 6: Create version entry
+      await createVersionEntry(projectId, freshExportData, filename)
       
       const duration = Date.now() - startTime
       logAction('PDF_EXPORT_SUCCESS', { 
         duration,
-        filename
+        filename,
+        sectionsIncluded: Object.keys(pdfModel.sections).length
       })
       
       toast({
@@ -344,7 +220,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
     } finally {
       setExporting(false)
     }
-  }, [exporting, previewData, projectId, logAction, toast])
+  }, [exporting, projectId, previewData, onSave, logAction, toast])
 
   // Live preview component
   const renderLivePreview = () => {
