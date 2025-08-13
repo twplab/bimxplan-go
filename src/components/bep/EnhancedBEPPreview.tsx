@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Download, FileText, Eye, Calendar, Users, Building, MapPin, RotateCw } from "lucide-react"
+import { Download, FileText, Eye, Calendar, Users, Building, MapPin, RotateCw, Settings, Globe, CheckCircle, FileArchive, Layers, Code } from "lucide-react"
 import { ProjectData } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import jsPDF from 'jspdf'
@@ -32,14 +32,39 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([])
+  const [hasAccess, setHasAccess] = useState(true)
+  const [retryCount, setRetryCount] = useState(0)
   const baseData = useMemo(() => data || projectData || {}, [data, projectData])
   const [previewData, setPreviewData] = useState<Partial<ProjectData>>(baseData)
   
+  // Debounced update effect
   useEffect(() => {
-    setPreviewData(baseData)
+    const timer = setTimeout(() => {
+      setPreviewData(baseData)
+    }, 300)
+    return () => clearTimeout(timer)
   }, [baseData])
 
   const { toast } = useToast()
+
+  // Check project access on mount
+  useEffect(() => {
+    const checkAccess = async () => {
+      if (!projectId) return
+      try {
+        const { data, error } = await supabase.rpc('user_can_access_project', { project_uuid: projectId })
+        if (error) throw error
+        setHasAccess(!!data)
+        if (!data) {
+          toast({ title: 'Access Denied', description: 'You do not have permission to view this project.', variant: 'destructive' })
+        }
+      } catch (error) {
+        console.error('Access check failed', error)
+        setHasAccess(false)
+      }
+    }
+    checkAccess()
+  }, [projectId, toast])
 
   const validateData = (d: Partial<ProjectData>): ValidationIssue[] => {
     const issues: ValidationIssue[] = []
@@ -174,31 +199,60 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
     return md
   }
 
-  const refreshPreview = async () => {
+  const refreshPreview = useCallback(async (retry = false) => {
+    if (!hasAccess && projectId) return
+    
     setIsRefreshing(true)
     try {
       if (onSave) await onSave()
       let latest = baseData
       if (projectId) {
-        const { data, error } = await supabase
+        // Add timeout for large projects
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 10000)
+        )
+        const dataPromise = supabase
           .from('projects')
           .select('project_data,id,name')
           .eq('id', projectId)
           .maybeSingle()
+        
+        const { data, error } = await Promise.race([dataPromise, timeoutPromise]) as any
         if (error) throw error
         latest = (data?.project_data as Partial<ProjectData>) || latest
       }
       setPreviewData(latest)
+      setRetryCount(0)
       toast({ title: 'Preview updated', description: 'Preview reflects latest saved data.' })
     } catch (error) {
-      console.error('Preview refresh error', { projectId, error })
-      toast({ title: 'Preview refresh failed', description: 'Could not refresh preview. Try again.', variant: 'destructive' })
+      console.error('Preview refresh error', { projectId, error, retry })
+      if (!retry && retryCount < 2) {
+        setRetryCount(prev => prev + 1)
+        toast({ 
+          title: 'Retrying...', 
+          description: `Refresh failed, retrying (${retryCount + 1}/3)...` 
+        })
+        setTimeout(() => refreshPreview(true), 1000)
+        return
+      }
+      toast({ 
+        title: 'Preview refresh failed', 
+        description: error instanceof Error && error.message === 'Request timeout' 
+          ? 'Request timed out. Try again for large projects.' 
+          : 'Could not refresh preview. Try again.',
+        variant: 'destructive' 
+      })
     } finally {
       setIsRefreshing(false)
     }
-  }
+  }, [hasAccess, projectId, onSave, baseData, retryCount, toast])
 
   const generatePDF = async () => {
+    if (!hasAccess && projectId) {
+      toast({ title: 'Access Denied', description: 'You do not have permission to export this project.', variant: 'destructive' })
+      return
+    }
+
     setExporting(true)
     const exportStartedAt = new Date()
     try {
@@ -207,11 +261,16 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       // Fetch freshest data from DB to avoid stale content
       let exportData: Partial<ProjectData> = previewData
       if (projectId) {
-        const { data, error } = await supabase
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Export timeout')), 15000)
+        )
+        const dataPromise = supabase
           .from('projects')
           .select('project_data,id,name')
           .eq('id', projectId)
           .maybeSingle()
+        
+        const { data, error } = await Promise.race([dataPromise, timeoutPromise]) as any
         if (error) throw error
         exportData = (data?.project_data as Partial<ProjectData>) || exportData
       }
@@ -246,7 +305,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
           return null
         }
       }
-      const logoDataUrl = await getImageDataUrl(logoUrl)
+      const logoDataUrl = await getImageDataUrl(logoUrl).catch(() => null)
 
       const addHeader = (first = false) => {
         // Header: logo + title + divider
@@ -582,7 +641,195 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
         </section>
       )}
 
-      {/* Add more sections here for complete preview */}
+      {/* Software Overview */}
+      {previewData.software_overview?.main_tools?.length > 0 && (
+        <section>
+          <h2 className="text-xl font-semibold mb-4 flex items-center">
+            <Code className="h-5 w-5 mr-2" />
+            Software Overview
+          </h2>
+          <div className="grid gap-2">
+            {previewData.software_overview.main_tools.map((tool, index) => (
+              <Card key={index}>
+                <CardContent className="pt-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-medium">{tool.name}{tool.version && ` (${tool.version})`}</h3>
+                    {tool.discipline && <Badge variant="outline">{tool.discipline}</Badge>}
+                  </div>
+                  {tool.usage && <p className="text-sm text-muted-foreground">{tool.usage}</p>}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Modeling Scope */}
+      {previewData.modeling_scope && (
+        <section>
+          <h2 className="text-xl font-semibold mb-4 flex items-center">
+            <Layers className="h-5 w-5 mr-2" />
+            Modeling Scope
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            {previewData.modeling_scope.general_lod && (
+              <div><strong>General LOD:</strong> {previewData.modeling_scope.general_lod}</div>
+            )}
+            {previewData.modeling_scope.units && (
+              <div><strong>Units:</strong> {previewData.modeling_scope.units}</div>
+            )}
+          </div>
+          {previewData.modeling_scope.levels_grids_strategy && (
+            <div className="mb-4">
+              <strong>Levels/Grids Strategy:</strong> {previewData.modeling_scope.levels_grids_strategy}
+            </div>
+          )}
+          {previewData.modeling_scope.discipline_lods?.length > 0 && (
+            <div>
+              <h3 className="font-medium mb-2">Discipline-Specific LODs</h3>
+              <div className="space-y-2">
+                {previewData.modeling_scope.discipline_lods.map((lod, index) => (
+                  <div key={index} className="flex justify-between items-center p-2 bg-muted rounded">
+                    <span><strong>{lod.discipline}:</strong> {lod.lod_level}</span>
+                    {lod.description && <span className="text-sm text-muted-foreground">{lod.description}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* File Naming Convention */}
+      {previewData.file_naming && (
+        <section>
+          <h2 className="text-xl font-semibold mb-4 flex items-center">
+            <FileArchive className="h-5 w-5 mr-2" />
+            File Naming Convention
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {typeof previewData.file_naming.use_conventions === 'boolean' && (
+              <div><strong>Use Standard Conventions:</strong> {previewData.file_naming.use_conventions ? 'Yes' : 'No'}</div>
+            )}
+            {previewData.file_naming.prefix_format && (
+              <div><strong>Prefix Format:</strong> {previewData.file_naming.prefix_format}</div>
+            )}
+            {previewData.file_naming.discipline_codes && (
+              <div><strong>Discipline Codes:</strong> {previewData.file_naming.discipline_codes}</div>
+            )}
+            {previewData.file_naming.versioning_format && (
+              <div><strong>Versioning Format:</strong> {previewData.file_naming.versioning_format}</div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Collaboration & CDE */}
+      {previewData.collaboration_cde && (
+        <section>
+          <h2 className="text-xl font-semibold mb-4 flex items-center">
+            <Users className="h-5 w-5 mr-2" />
+            Collaboration & Common Data Environment
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {previewData.collaboration_cde.platform && (
+              <div><strong>Platform:</strong> {previewData.collaboration_cde.platform}</div>
+            )}
+            {previewData.collaboration_cde.file_linking_method && (
+              <div><strong>File Linking Method:</strong> {previewData.collaboration_cde.file_linking_method}</div>
+            )}
+            {previewData.collaboration_cde.sharing_frequency && (
+              <div><strong>Sharing Frequency:</strong> {previewData.collaboration_cde.sharing_frequency}</div>
+            )}
+            {previewData.collaboration_cde.setup_responsibility && (
+              <div><strong>Setup Responsibility:</strong> {previewData.collaboration_cde.setup_responsibility}</div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Geolocation */}
+      {previewData.geolocation && (
+        <section>
+          <h2 className="text-xl font-semibold mb-4 flex items-center">
+            <Globe className="h-5 w-5 mr-2" />
+            Geolocation & Coordinate System
+          </h2>
+          <div className="space-y-2">
+            {typeof previewData.geolocation.is_georeferenced === 'boolean' && (
+              <div><strong>Georeferenced:</strong> {previewData.geolocation.is_georeferenced ? 'Yes' : 'No'}</div>
+            )}
+            {previewData.geolocation.is_georeferenced && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                {previewData.geolocation.coordinate_setup && (
+                  <div><strong>Coordinate Setup:</strong> {previewData.geolocation.coordinate_setup}</div>
+                )}
+                {previewData.geolocation.origin_location && (
+                  <div><strong>Origin Location:</strong> {previewData.geolocation.origin_location}</div>
+                )}
+                {previewData.geolocation.coordinate_system && (
+                  <div><strong>Coordinate System:</strong> {previewData.geolocation.coordinate_system}</div>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Model Checking & Coordination */}
+      {previewData.model_checking && (
+        <section>
+          <h2 className="text-xl font-semibold mb-4 flex items-center">
+            <CheckCircle className="h-5 w-5 mr-2" />
+            Model Checking & Coordination
+          </h2>
+          <div className="space-y-2">
+            {previewData.model_checking.clash_detection_tools?.length > 0 && (
+              <div><strong>Clash Detection Tools:</strong> {previewData.model_checking.clash_detection_tools.join(', ')}</div>
+            )}
+            {previewData.model_checking.coordination_process && (
+              <div><strong>Coordination Process:</strong> {previewData.model_checking.coordination_process}</div>
+            )}
+            {previewData.model_checking.meeting_frequency && (
+              <div><strong>Meeting Frequency:</strong> {previewData.model_checking.meeting_frequency}</div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Outputs & Deliverables */}
+      {previewData.outputs_deliverables?.deliverables_by_phase?.length > 0 && (
+        <section>
+          <h2 className="text-xl font-semibold mb-4 flex items-center">
+            <FileText className="h-5 w-5 mr-2" />
+            Outputs & Deliverables
+          </h2>
+          <div className="space-y-4">
+            {previewData.outputs_deliverables.deliverables_by_phase.map((phase, index) => (
+              <Card key={index}>
+                <CardHeader>
+                  <CardTitle className="text-lg">{phase.phase}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {phase.deliverables?.length > 0 && (
+                    <div className="mb-2">
+                      <strong>Deliverables:</strong> {phase.deliverables.join(', ')}
+                    </div>
+                  )}
+                  {phase.formats?.length > 0 && (
+                    <div className="mb-2">
+                      <strong>Formats:</strong> {phase.formats.join(', ')}
+                    </div>
+                  )}
+                  {phase.responsibility && (
+                    <div><strong>Responsibility:</strong> {phase.responsibility}</div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
       
       <div className="text-center text-sm text-muted-foreground border-t pt-4">
         Generated by BIMxPlan Go on {new Date().toLocaleDateString()}
@@ -596,38 +843,38 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
         <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <span>Preview & Export</span>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={refreshPreview} disabled={isRefreshing}>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => refreshPreview()} disabled={isRefreshing || (!hasAccess && !!projectId)}>
               <RotateCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span>Refresh Preview</span>
             </Button>
             <Dialog open={showPreview} onOpenChange={(v) => { setShowPreview(v); if (v) refreshPreview() }}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                <Button variant="outline" size="sm" className="w-full sm:w-auto" disabled={!hasAccess && !!projectId}>
                   <Eye className="h-4 w-4 mr-2" />
                   <span className="hidden sm:inline">Preview</span>
                   <span className="sm:hidden">Preview Document</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[80vh]">
+              <DialogContent className="max-w-5xl max-h-[85vh]">
                 <DialogHeader>
                   <DialogTitle>BEP Preview</DialogTitle>
                   <DialogDescription>
                     Preview your BIM Execution Plan before exporting
                   </DialogDescription>
                 </DialogHeader>
-                <ScrollArea className="h-[60vh]">
+                <ScrollArea className="h-[70vh] pr-4">
                   <PreviewContent />
                 </ScrollArea>
               </DialogContent>
             </Dialog>
             
-            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleCopyMarkdown}>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleCopyMarkdown} disabled={!hasAccess && !!projectId}>
               <FileText className="h-4 w-4 mr-2" />
               <span className="hidden sm:inline">Copy Markdown</span>
               <span className="sm:hidden">Copy MD</span>
             </Button>
             
-            <Button size="sm" className="w-full sm:w-auto" onClick={generatePDF} disabled={issues.length > 0 || exporting}>
+            <Button size="sm" className="w-full sm:w-auto" onClick={generatePDF} disabled={issues.length > 0 || exporting || (!hasAccess && !!projectId)}>
               <Download className={`h-4 w-4 mr-2 ${exporting ? 'animate-pulse' : ''}`} />
               <span className="hidden sm:inline">{exporting ? 'Exporting…' : 'Export PDF'}</span>
               <span className="sm:hidden">PDF</span>
@@ -637,7 +884,15 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
       </CardHeader>
       
       <CardContent>
-        {issues.length > 0 && (
+        {!hasAccess && projectId && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTitle>Access Denied</AlertTitle>
+            <AlertDescription>
+              You do not have permission to view or export this project.
+            </AlertDescription>
+          </Alert>
+        )}
+        {issues.length > 0 && hasAccess && (
           <Alert variant="destructive" className="mb-4">
             <AlertTitle>Missing required fields</AlertTitle>
             <AlertDescription>
@@ -654,20 +909,20 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
           <p className="text-muted-foreground mb-6">
             Refresh the preview, copy Markdown, or export a PDF. PDF export is disabled until required fields are completed.
           </p>
-          <div className="flex flex-col sm:flex-row justify-center gap-3 sm:space-x-4 sm:space-y-0">
-            <Button variant="outline" className="w-full sm:w-auto" onClick={refreshPreview} disabled={isRefreshing}>
+          <div className="flex flex-col sm:flex-row justify-center gap-2 max-w-2xl mx-auto">
+            <Button variant="outline" className="flex-1 sm:flex-none sm:min-w-[140px]" onClick={() => refreshPreview()} disabled={isRefreshing || (!hasAccess && !!projectId)}>
               <RotateCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh Preview
             </Button>
-            <Button variant="outline" className="w-full sm:w-auto" onClick={async () => { await refreshPreview(); setShowPreview(true) }}>
+            <Button variant="outline" className="flex-1 sm:flex-none sm:min-w-[140px]" onClick={async () => { await refreshPreview(); setShowPreview(true) }} disabled={!hasAccess && !!projectId}>
               <Eye className="h-4 w-4 mr-2" />
               Preview Document
             </Button>
-            <Button variant="outline" className="w-full sm:w-auto" onClick={handleCopyMarkdown}>
+            <Button variant="outline" className="flex-1 sm:flex-none sm:min-w-[140px]" onClick={handleCopyMarkdown} disabled={!hasAccess && !!projectId}>
               <FileText className="h-4 w-4 mr-2" />
               Copy Markdown
             </Button>
-            <Button className="w-full sm:w-auto" onClick={generatePDF} disabled={issues.length > 0 || exporting}>
+            <Button className="flex-1 sm:flex-none sm:min-w-[140px]" onClick={generatePDF} disabled={issues.length > 0 || exporting || (!hasAccess && !!projectId)}>
               <Download className={`h-4 w-4 mr-2 ${exporting ? 'animate-pulse' : ''}`} />
               {exporting ? 'Exporting…' : 'Export PDF'}
             </Button>
