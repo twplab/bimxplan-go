@@ -207,7 +207,7 @@ export function validateBepData(data: Partial<ProjectData>): ValidationIssue[] {
  * @returns Complete BEP data structure
  */
 export async function getBepExportData(projectId: string): Promise<BEPExportData> {
-  return await withBEPErrorHandling(async () => {
+  const wrappedFunction = withBEPErrorHandling(async () => {
     bepErrorHandler.log('info', 'DATA_COLLECTION_START', 'Starting BEP data collection', { projectId })
 
     return await retryWithBackoff(async () => {
@@ -315,6 +315,8 @@ export async function getBepExportData(projectId: string): Promise<BEPExportData
     return exportData
     }, 3, 1000, 'DATA_COLLECTION_RETRY')
   }, 'DATA_COLLECTION', { projectId })
+  
+  return await wrappedFunction()
 }
 
 /**
@@ -323,7 +325,7 @@ export async function getBepExportData(projectId: string): Promise<BEPExportData
  * @param currentData - Current form data to save
  */
 export async function ensureLatestSave(projectId: string, currentData: Partial<ProjectData>): Promise<void> {
-  return await withBEPErrorHandling(async () => {
+  const wrappedFunction = withBEPErrorHandling(async () => {
     bepErrorHandler.log('info', 'ENSURE_LATEST_SAVE_START', 'Starting save operation', {
       projectId,
       dataSize: JSON.stringify(currentData).length
@@ -343,4 +345,6 @@ export async function ensureLatestSave(projectId: string, currentData: Partial<P
 
     bepErrorHandler.log('info', 'ENSURE_LATEST_SAVE_SUCCESS', 'Save operation completed', { projectId })
   }, 'ENSURE_LATEST_SAVE', { projectId })
+  
+  return await wrappedFunction()
 }
