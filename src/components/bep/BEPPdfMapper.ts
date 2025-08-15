@@ -202,7 +202,7 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
   }
 
   // 3. Software Overview - Include if any software data exists
-  const software = data.sections.software  
+  const software = data.softwareOverview  
   if (software && (nonEmpty(software.main_tools) || nonEmpty(software.team_specific_tools))) {
     const mainTools = nonEmpty(software.main_tools)
       ? software.main_tools
@@ -232,7 +232,7 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
   }
 
   // 4. Modeling Scope - Include if any modeling data exists
-  const modeling = data.sections.modeling
+  const modeling = data.modelingScope
   if (modeling && (hasContent(modeling.general_lod) || hasContent(modeling.units) || 
       hasContent(modeling.levels_grids_strategy) || nonEmpty(modeling.discipline_lods) ||
       nonEmpty(modeling.exceptions))) {
@@ -257,7 +257,7 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
   }
 
   // 5. File Naming - Include if any naming data exists
-  const naming = data.sections.naming
+  const naming = data.fileNaming
   if (naming && (naming.use_conventions || hasContent(naming.prefix_format) || 
       hasContent(naming.discipline_codes) || hasContent(naming.versioning_format) ||
       nonEmpty(naming.examples))) {
@@ -274,7 +274,7 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
   }
 
   // 6. Collaboration & CDE - Include if any collaboration data exists
-  const collab = data.sections.collaboration
+  const collab = data.collaborationCDE
   if (collab && (hasContent(collab.platform) || hasContent(collab.file_linking_method) ||
       hasContent(collab.sharing_frequency) || hasContent(collab.setup_responsibility) ||
       hasContent(collab.access_controls))) {
@@ -289,7 +289,7 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
   }
 
   // 7. Geolocation - Include if any geolocation data exists
-  const geo = data.sections.geolocation
+  const geo = data.geolocation
   if (geo && (geo.is_georeferenced !== undefined || hasContent(geo.coordinate_setup) ||
       hasContent(geo.origin_location) || hasContent(geo.coordinate_system))) {
     
@@ -302,7 +302,7 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
   }
 
   // 8. Model Checking - Include if any checking data exists
-  const checking = data.sections.checking
+  const checking = data.modelChecking
   if (checking && (nonEmpty(checking.clash_detection_tools) || hasContent(checking.coordination_process) ||
       hasContent(checking.meeting_frequency) || hasContent(checking.responsibility_matrix))) {
     
@@ -317,7 +317,7 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
   }
 
   // 9. Outputs & Deliverables - Include if any output data exists  
-  const outputs = data.sections.outputs
+  const outputs = data.outputsDeliverables
   if (outputs && (nonEmpty(outputs.deliverables_by_phase) || nonEmpty(outputs.formats_standards) ||
       nonEmpty(outputs.milestone_schedule))) {
     
