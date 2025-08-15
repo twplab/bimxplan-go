@@ -50,7 +50,7 @@ export interface ValidationIssue {
   section: string
   field: string
   message: string
-  severity: 'error' | 'warning'
+  severity: 'required' | 'recommended' | 'info'
 }
 
 /**

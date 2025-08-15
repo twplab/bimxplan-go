@@ -18,16 +18,33 @@ export interface BEPProgress {
 }
 
 /**
- * Computes BEP completion progress based on minimal required fields per step
+ * Explicit required keys per step for accurate progress calculation
+ */
+const STEP_REQUIRED_KEYS: Record<string, string[]> = {
+  overview: ['project_name', 'client_name', 'location', 'project_type'],
+  team: ['firms'],
+  software: ['main_tools'], 
+  modeling: ['general_lod', 'units'],
+  naming: [], // Optional step
+  collaboration: ['platform'],
+  geolocation: ['is_georeferenced', 'coordinate_system'], 
+  checking: ['clash_detection_tools'],
+  outputs: ['deliverables_by_phase']
+}
+
+/**
+ * Computes BEP completion progress based on explicit required fields per step
  */
 export function computeBepProgress(projectData: Partial<ProjectData>): BEPProgress {
+  const startTime = performance.now()
+  
   const steps: StepProgress[] = [
     // Step 1: Project Overview
     {
       step: 1,
       stepId: 'overview',
       title: 'Project Overview',
-      requiredFields: ['project_name', 'client_name'],
+      requiredFields: STEP_REQUIRED_KEYS.overview,
       completedFields: [],
       complete: false,
       percent: 0
@@ -37,7 +54,7 @@ export function computeBepProgress(projectData: Partial<ProjectData>): BEPProgre
       step: 2,
       stepId: 'team',
       title: 'Team & Responsibilities',
-      requiredFields: ['firms'],
+      requiredFields: STEP_REQUIRED_KEYS.team,
       completedFields: [],
       complete: false,
       percent: 0
@@ -47,7 +64,7 @@ export function computeBepProgress(projectData: Partial<ProjectData>): BEPProgre
       step: 3,
       stepId: 'software', 
       title: 'Software Overview',
-      requiredFields: ['main_tools'],
+      requiredFields: STEP_REQUIRED_KEYS.software,
       completedFields: [],
       complete: false,
       percent: 0
@@ -57,7 +74,7 @@ export function computeBepProgress(projectData: Partial<ProjectData>): BEPProgre
       step: 4,
       stepId: 'modeling',
       title: 'Modeling Scope',
-      requiredFields: ['general_lod', 'units'],
+      requiredFields: STEP_REQUIRED_KEYS.modeling,
       completedFields: [],
       complete: false,
       percent: 0
@@ -67,7 +84,7 @@ export function computeBepProgress(projectData: Partial<ProjectData>): BEPProgre
       step: 5,
       stepId: 'naming',
       title: 'File Naming',
-      requiredFields: [],
+      requiredFields: STEP_REQUIRED_KEYS.naming,
       completedFields: [],
       complete: true, // Optional step
       percent: 100
@@ -77,7 +94,7 @@ export function computeBepProgress(projectData: Partial<ProjectData>): BEPProgre
       step: 6,
       stepId: 'collaboration',
       title: 'Collaboration & CDE',
-      requiredFields: ['platform'],
+      requiredFields: STEP_REQUIRED_KEYS.collaboration,
       completedFields: [],
       complete: false,
       percent: 0
@@ -87,7 +104,7 @@ export function computeBepProgress(projectData: Partial<ProjectData>): BEPProgre
       step: 7,
       stepId: 'geolocation',
       title: 'Geolocation',
-      requiredFields: ['is_georeferenced', 'coordinate_system'],
+      requiredFields: STEP_REQUIRED_KEYS.geolocation,
       completedFields: [],
       complete: false,
       percent: 0
@@ -97,7 +114,7 @@ export function computeBepProgress(projectData: Partial<ProjectData>): BEPProgre
       step: 8,
       stepId: 'checking',
       title: 'Model Checking',
-      requiredFields: ['clash_detection_tools'],
+      requiredFields: STEP_REQUIRED_KEYS.checking,
       completedFields: [],
       complete: false,
       percent: 0
@@ -107,7 +124,7 @@ export function computeBepProgress(projectData: Partial<ProjectData>): BEPProgre
       step: 9,
       stepId: 'outputs',
       title: 'Outputs & Deliverables',
-      requiredFields: ['deliverables_by_phase'],
+      requiredFields: STEP_REQUIRED_KEYS.outputs,
       completedFields: [],
       complete: false,
       percent: 0
@@ -142,6 +159,17 @@ export function computeBepProgress(projectData: Partial<ProjectData>): BEPProgre
   const completedSteps = steps.filter(s => s.complete).length
   const totalSteps = steps.length
   const overallPercent = Math.round((completedSteps / totalSteps) * 100)
+
+  const endTime = performance.now()
+  const duration = endTime - startTime
+
+  console.log('[BEP-PROGRESS-PERFORMANCE]', {
+    duration: `${duration.toFixed(2)}ms`,
+    completedSteps,
+    totalSteps,
+    overallPercent,
+    target: '< 500ms'
+  })
 
   console.log('[BEP-PROGRESS]', {
     completedSteps,
@@ -185,11 +213,10 @@ function getSectionKey(stepId: string): string {
 
 /**
  * Checks if a specific field is complete for a given step
- * Fixed to match actual ProjectData structure
+ * Enhanced with better validation logic
  */
 function isFieldComplete(sectionData: any, field: string, stepId: string): boolean {
   if (!sectionData) {
-    console.log(`[BEP-PROGRESS-DEBUG] No section data for field: ${field} in step: ${stepId}`)
     return false
   }
 
@@ -198,47 +225,61 @@ function isFieldComplete(sectionData: any, field: string, stepId: string): boole
   switch (field) {
     case 'project_name':
     case 'client_name':
+    case 'location':
+    case 'project_type':
     case 'general_lod':
     case 'units':
     case 'platform':
-    case 'coordinate_system':
       result = !!(sectionData[field]?.trim())
       break
       
     case 'firms':
       result = Array.isArray(sectionData.firms) && sectionData.firms.length > 0 &&
-               sectionData.firms.some((firm: any) => firm.name?.trim() && firm.discipline?.trim() && firm.bim_lead?.trim())
+               sectionData.firms.some((firm: any) => 
+                 firm.name?.trim() && firm.discipline?.trim() && firm.bim_lead?.trim()
+               )
       break
-             
+              
     case 'main_tools':
       result = Array.isArray(sectionData.main_tools) && sectionData.main_tools.length > 0 &&
                sectionData.main_tools.some((tool: any) => tool.name?.trim())
       break
-             
+              
     case 'clash_detection_tools':
       result = Array.isArray(sectionData.clash_detection_tools) && sectionData.clash_detection_tools.length > 0
       break
       
     case 'is_georeferenced':
-      result = sectionData.is_georeferenced !== undefined && sectionData.is_georeferenced !== null && 
-               sectionData.coordinate_system?.trim()
+      result = sectionData.is_georeferenced !== undefined && sectionData.is_georeferenced !== null
+      break
+      
+    case 'coordinate_system':
+      // Only required if is_georeferenced is true
+      if (sectionData.is_georeferenced === true) {
+        result = !!(sectionData.coordinate_system?.trim())
+      } else {
+        result = true // Not required if not georeferenced
+      }
       break
       
     case 'deliverables_by_phase':
       result = Array.isArray(sectionData.deliverables_by_phase) && sectionData.deliverables_by_phase.length > 0 &&
-               sectionData.deliverables_by_phase.some((phase: any) => phase.phase?.trim() || phase.deliverables?.length > 0)
+               sectionData.deliverables_by_phase.some((phase: any) => 
+                 phase.phase?.trim() && Array.isArray(phase.deliverables) && phase.deliverables.length > 0
+               )
       break
-             
+              
     default:
-      console.log(`[BEP-PROGRESS-DEBUG] Unknown field: ${field}`)
+      console.warn(`[BEP-PROGRESS] Unknown field: ${field} in step: ${stepId}`)
       result = false
   }
   
-  console.log(`[BEP-PROGRESS-DEBUG] Field check: ${field} = ${result}`, {
-    stepId,
-    hasData: !!sectionData,
-    fieldValue: sectionData[field]
-  })
-  
   return result
+}
+
+/**
+ * Get required fields for a specific step
+ */
+export function getStepRequiredFields(stepId: string): string[] {
+  return STEP_REQUIRED_KEYS[stepId] || []
 }

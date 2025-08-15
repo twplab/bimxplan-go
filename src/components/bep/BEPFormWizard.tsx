@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { ChevronLeft, ChevronRight, Save, Download, FileText, Check, AlertCircle, Clock } from "lucide-react"
+import { ChevronLeft, ChevronRight, Save, Download, FileText, Check, AlertCircle, Clock, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ProjectOverviewForm } from "./forms/ProjectOverviewForm"
 import { TeamResponsibilitiesForm } from "./forms/TeamResponsibilitiesForm"
@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client"
 import { validateStep, validateProjectData, ValidationReport } from "./BEPValidationService"
 import { computeBepProgress, BEPProgress } from "./BEPProgressCalculator"
 import { bepDataEvents } from "./BEPDataEvents"
+import { getBepExportData } from "./BEPDataCollector"
 
 interface BEPFormWizardProps {
   onClose: () => void
@@ -34,16 +35,16 @@ interface StepValidation {
 }
 
 const STEPS = [
-  { id: 'overview', title: 'Project Overview', component: ProjectOverviewForm, required: ['project_name', 'client_name', 'location', 'project_type'] },
-  { id: 'team', title: 'Team & Responsibilities', component: TeamResponsibilitiesForm, required: ['firms'] },
-  { id: 'software', title: 'Software Overview', component: SoftwareOverviewForm, required: ['main_tools'] },
-  { id: 'modeling', title: 'Modeling Scope', component: ModelingScopeForm, required: ['general_lod', 'units'] },
-  { id: 'naming', title: 'File Naming', component: FileNamingForm, required: [] },
-  { id: 'collaboration', title: 'Collaboration & CDE', component: CollaborationCDEForm, required: ['platform'] },
-  { id: 'geolocation', title: 'Geolocation', component: GeolocationForm, required: ['is_georeferenced'] },
-  { id: 'checking', title: 'Model Checking', component: ModelCheckingForm, required: ['clash_detection_tools'] },
-  { id: 'outputs', title: 'Outputs & Deliverables', component: OutputsDeliverablesForm, required: [] },
-  { id: 'preview', title: 'Preview & Export', component: EnhancedBEPPreview, required: [] },
+  { id: 'overview', title: 'Project Overview', component: ProjectOverviewForm },
+  { id: 'team', title: 'Team & Responsibilities', component: TeamResponsibilitiesForm },
+  { id: 'software', title: 'Software Overview', component: SoftwareOverviewForm },
+  { id: 'modeling', title: 'Modeling Scope', component: ModelingScopeForm },
+  { id: 'naming', title: 'File Naming', component: FileNamingForm },
+  { id: 'collaboration', title: 'Collaboration & CDE', component: CollaborationCDEForm },
+  { id: 'geolocation', title: 'Geolocation', component: GeolocationForm },
+  { id: 'checking', title: 'Model Checking', component: ModelCheckingForm },
+  { id: 'outputs', title: 'Outputs & Deliverables', component: OutputsDeliverablesForm },
+  { id: 'preview', title: 'Preview & Export', component: EnhancedBEPPreview },
 ]
 
 export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }: BEPFormWizardProps) {
@@ -54,7 +55,11 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
   const [progressData, setProgressData] = useState<BEPProgress | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
-  const [autoSaveTimeout, setAutoSaveTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [isRehydrating, setIsRehydrating] = useState(false)
+  
+  // Enhanced autosave with debouncing
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastSaveDataRef = useRef<string>('')
 
   const stepProgress = ((currentStep + 1) / STEPS.length) * 100
   const dataProgress = progressData?.overallPercent || 0
@@ -75,6 +80,54 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
     return logData
   }, [projectId, currentStep, projectData])
 
+  // Rehydrate from getBepExportData on mount
+  const rehydrateFromServer = useCallback(async () => {
+    if (!projectId) return
+    
+    setIsRehydrating(true)
+    try {
+      logAction('REHYDRATE_START')
+      const exportData = await getBepExportData(projectId)
+      
+      // Extract project data from export structure
+      const rehydratedData: Partial<ProjectData> = {
+        project_overview: exportData.projectOverview,
+        team_responsibilities: exportData.teamResponsibilities,
+        software_overview: exportData.softwareOverview,
+        modeling_scope: exportData.modelingScope,
+        file_naming: exportData.fileNaming,
+        collaboration_cde: exportData.collaborationCDE,
+        geolocation: exportData.geolocation,
+        model_checking: exportData.modelChecking,
+        outputs_deliverables: exportData.outputsDeliverables
+      }
+      
+      // Remove undefined sections
+      Object.keys(rehydratedData).forEach(key => {
+        if (rehydratedData[key as keyof ProjectData] === undefined) {
+          delete rehydratedData[key as keyof ProjectData]
+        }
+      })
+      
+      setProjectData(rehydratedData)
+      updateValidationReport(rehydratedData)
+      
+      logAction('REHYDRATE_SUCCESS', { 
+        sectionsLoaded: Object.keys(rehydratedData).length
+      })
+      
+      toast({
+        title: "Data Loaded",
+        description: "Previous progress has been restored"
+      })
+    } catch (error) {
+      logAction('REHYDRATE_ERROR', { error: error.message })
+      console.error('Failed to rehydrate data:', error)
+    } finally {
+      setIsRehydrating(false)
+    }
+  }, [projectId, logAction])
+
   // Enhanced validation function
   const validateCurrentStep = useCallback((stepId: string, stepData: any): StepValidation => {
     return validateStep(stepId, stepData)
@@ -91,7 +144,7 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
       validationPaths: report.issues.map(i => `${i.section}.${i.field}`),
       completeness: report.completeness,
       totalIssues: report.issues.length,
-      criticalErrors: report.issues.filter(i => i.severity === 'error').length
+      criticalErrors: report.issues.filter(i => i.severity === 'required').length
     })
     
     // Calculate progress using the new progress calculator
@@ -112,40 +165,55 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
       }))
     })
     
-    // Emit events for other components to update
+    // Emit single event per update to prevent double renders
     if (projectId) {
-      bepDataEvents.emit('bep:validation-updated', projectId, report)
-      bepDataEvents.emit('bep:progress-updated', projectId, progress)
+      bepDataEvents.emit('bep:data-updated', projectId, {
+        validation: report,
+        progress: progress,
+        data: data
+      })
     }
     
     return report
   }, [projectId])
 
-  // Auto-save functionality
+  // Enhanced debounced autosave with payload comparison
   const triggerAutoSave = useCallback(async (data: Partial<ProjectData>) => {
-    if (autoSaveTimeout) {
-      clearTimeout(autoSaveTimeout)
+    if (!onUpdate || !projectId) return
+    
+    // Prevent saving identical payloads
+    const currentDataString = JSON.stringify(data)
+    if (currentDataString === lastSaveDataRef.current) {
+      console.log('[BEP-AUTOSAVE] Skipping - identical payload')
+      return
+    }
+    
+    // Clear previous timeout
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
     }
 
-    const timeout = setTimeout(async () => {
+    // Set new timeout with 500ms debounce
+    autoSaveTimeoutRef.current = setTimeout(async () => {
       try {
         logAction('AUTOSAVE_START')
-        if (onUpdate) {
-          await onUpdate(data)
-          setLastSaved(new Date())
-          logAction('AUTOSAVE_SUCCESS')
-        }
+        await onUpdate(data)
+        setLastSaved(new Date())
+        lastSaveDataRef.current = currentDataString
+        logAction('AUTOSAVE_SUCCESS')
+        
+        // Show subtle save indicator
+        console.log('[BEP-AUTOSAVE] Saved at', new Date().toLocaleTimeString())
       } catch (error) {
         logAction('AUTOSAVE_ERROR', { error: error.message })
         console.error('Auto-save failed:', error)
+        // Don't show toast for autosave failures to avoid spam
       }
     }, 500) // 500ms debounce
-
-    setAutoSaveTimeout(timeout)
-  }, [autoSaveTimeout, onUpdate, logAction])
+  }, [onUpdate, projectId, logAction])
 
   const handleNext = () => {
-    const currentStepValidation = validateCurrentStep(STEPS[currentStep].id, projectData[STEPS[currentStep].id])
+    const currentStepValidation = validateCurrentStep(STEPS[currentStep].id, projectData[STEPS[currentStep].id as keyof ProjectData])
     
     if (!currentStepValidation.isValid) {
       toast({
@@ -189,12 +257,7 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
     // Update overall validation report and progress
     updateValidationReport(updatedData)
     
-    // Emit data update event
-    if (projectId) {
-      bepDataEvents.emit('bep:data-updated', projectId, updatedData)
-    }
-    
-    // Trigger auto-save
+    // Trigger auto-save with debouncing
     triggerAutoSave(updatedData)
   }
 
@@ -225,43 +288,61 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
     }
   }
 
-  // Load project data on mount
+  // Rehydrate data on mount
   useEffect(() => {
     if (projectId) {
-      logAction('PROJECT_LOAD_START')
-      // Validate all steps on load
+      rehydrateFromServer()
+    }
+  }, [projectId, rehydrateFromServer])
+
+  // Validate all steps when data changes
+  useEffect(() => {
+    if (Object.keys(projectData).length > 0) {
       const validations: Record<string, StepValidation> = {}
       STEPS.forEach(step => {
-        validations[step.id] = validateCurrentStep(step.id, projectData[step.id])
+        if (step.id !== 'preview') {
+          validations[step.id] = validateCurrentStep(step.id, projectData[step.id as keyof ProjectData])
+        }
       })
       setStepValidations(validations)
-      
-      // Update validation report
       updateValidationReport(projectData)
-      
-      logAction('PROJECT_LOAD_SUCCESS', { validationsCount: Object.keys(validations).length })
     }
-  }, [projectId, validateCurrentStep, updateValidationReport, logAction, projectData])
+  }, [projectData, validateCurrentStep, updateValidationReport])
 
   // Cleanup auto-save timeout
   useEffect(() => {
     return () => {
-      if (autoSaveTimeout) {
-        clearTimeout(autoSaveTimeout)
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current)
       }
     }
-  }, [autoSaveTimeout])
+  }, [])
 
-  // Get step status
+  // Get step status for UI indicators
   const getStepStatus = (stepIndex: number) => {
     const step = STEPS[stepIndex]
-    const validation = stepValidations[step.id]
+    if (step.id === 'preview') return 'valid' // Preview step is always valid
     
+    const validation = stepValidations[step.id]
     if (!validation) return 'pending'
     return validation.isValid ? 'valid' : 'invalid'
   }
 
   const CurrentStepComponent = STEPS[currentStep].component
+
+  if (isRehydrating) {
+    return (
+      <div className="min-h-screen bg-background p-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center py-12">
+            <RefreshCw className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Loading Your BEP</h2>
+            <p className="text-muted-foreground">Restoring your previous progress...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -320,20 +401,10 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
             </div>
             <div className="flex items-center space-x-2">
               <span className="text-muted-foreground">{currentStep + 1} / {STEPS.length}</span>
-              {progressData && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => updateValidationReport(projectData)}
-                  className="text-xs px-2 py-1"
-                >
-                  Recompute
-                </Button>
-              )}
             </div>
           </div>
           
-          {/* Step Navigation Pills */}
+          {/* Step Navigation Pills - Updated immediately on save */}
           <div className="flex flex-wrap gap-2 mt-4">
             {STEPS.map((step, index) => {
               const status = getStepStatus(index)
@@ -360,7 +431,7 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <CardTitle>{STEPS[currentStep].title}</CardTitle>
-                {stepValidations[STEPS[currentStep].id] && (
+                {stepValidations[STEPS[currentStep].id] && STEPS[currentStep].id !== 'preview' && (
                   <Badge variant={stepValidations[STEPS[currentStep].id].isValid ? "default" : "destructive"}>
                     {stepValidations[STEPS[currentStep].id].isValid ? "Complete" : "Incomplete"}
                   </Badge>
@@ -370,7 +441,7 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
                 Step {currentStep + 1} of {STEPS.length}
               </div>
             </div>
-            {stepValidations[STEPS[currentStep].id] && !stepValidations[STEPS[currentStep].id].isValid && (
+            {stepValidations[STEPS[currentStep].id] && !stepValidations[STEPS[currentStep].id].isValid && STEPS[currentStep].id !== 'preview' && (
               <div className="mt-2 text-sm text-red-600">
                 Required: {stepValidations[STEPS[currentStep].id].issues.join(', ')}
               </div>

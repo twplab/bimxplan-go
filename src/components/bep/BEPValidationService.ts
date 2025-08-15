@@ -1,10 +1,13 @@
 import { ProjectData } from "@/lib/supabase"
 
+// Add enhanced severities and better organization
+export type ValidationSeverity = 'required' | 'recommended' | 'info'
+
 export interface ValidationRule {
   field: string
   section: string
   message: string
-  severity: 'error' | 'warning'
+  severity: ValidationSeverity
   validator: (data: any) => boolean
 }
 
@@ -12,6 +15,7 @@ export interface ValidationReport {
   isValid: boolean
   hasErrors: boolean
   hasWarnings: boolean
+  hasInfo: boolean
   issues: ValidationIssue[]
   completeness: number // 0-100 percentage
   sectionsValidated: string[]
@@ -21,11 +25,14 @@ export interface ValidationIssue {
   section: string
   field: string
   message: string
-  severity: 'error' | 'warning'
+  severity: ValidationSeverity
 }
 
+// Field-to-validator mapping for dynamic field clearing
+export const FIELD_VALIDATORS: Record<string, ValidationRule[]> = {}
+
 /**
- * Comprehensive validation rules for BEP data
+ * Comprehensive validation rules for BEP data with enhanced severities
  */
 export const BEP_VALIDATION_RULES: ValidationRule[] = [
   // Project Overview - Required fields
@@ -33,37 +40,44 @@ export const BEP_VALIDATION_RULES: ValidationRule[] = [
     field: 'project_name',
     section: 'Project Overview',
     message: 'Project name is required',
-    severity: 'error',
+    severity: 'required',
     validator: (data) => !!data?.project_overview?.project_name?.trim()
   },
   {
     field: 'client_name', 
     section: 'Project Overview',
     message: 'Client name is required',
-    severity: 'error',
+    severity: 'required',
     validator: (data) => !!data?.project_overview?.client_name?.trim()
   },
   {
     field: 'location',
     section: 'Project Overview', 
     message: 'Project location is required',
-    severity: 'error',
+    severity: 'required',
     validator: (data) => !!data?.project_overview?.location?.trim()
   },
   {
     field: 'project_type',
     section: 'Project Overview',
     message: 'Project type is required', 
-    severity: 'error',
+    severity: 'required',
     validator: (data) => !!data?.project_overview?.project_type?.trim()
   },
-  // Project Overview - Optional but recommended
+  // Project Overview - Recommended
   {
     field: 'key_milestones',
     section: 'Project Overview',
     message: 'Key milestones should be defined for better project planning',
-    severity: 'warning',
+    severity: 'recommended',
     validator: (data) => data?.project_overview?.key_milestones?.length > 0
+  },
+  {
+    field: 'description',
+    section: 'Project Overview',
+    message: 'Project description helps with context',
+    severity: 'info',
+    validator: (data) => !!data?.project_overview?.description?.trim()
   },
 
   // Team & Responsibilities - Required
@@ -71,7 +85,7 @@ export const BEP_VALIDATION_RULES: ValidationRule[] = [
     field: 'firms',
     section: 'Team & Responsibilities',
     message: 'At least one firm must be defined',
-    severity: 'error',
+    severity: 'required',
     validator: (data) => data?.team_responsibilities?.firms?.length > 0
   },
   
@@ -80,7 +94,7 @@ export const BEP_VALIDATION_RULES: ValidationRule[] = [
     field: 'main_tools',
     section: 'Software Overview', 
     message: 'At least one main BIM tool must be specified',
-    severity: 'error',
+    severity: 'required',
     validator: (data) => data?.software_overview?.main_tools?.length > 0
   },
 
@@ -89,14 +103,14 @@ export const BEP_VALIDATION_RULES: ValidationRule[] = [
     field: 'general_lod',
     section: 'Modeling Scope',
     message: 'General Level of Development (LOD) must be specified',
-    severity: 'error',
+    severity: 'required',
     validator: (data) => !!data?.modeling_scope?.general_lod?.trim()
   },
   {
     field: 'units',
     section: 'Modeling Scope',
     message: 'Project units must be specified',
-    severity: 'error', 
+    severity: 'required', 
     validator: (data) => !!data?.modeling_scope?.units?.trim()
   },
 
@@ -105,7 +119,7 @@ export const BEP_VALIDATION_RULES: ValidationRule[] = [
     field: 'platform',
     section: 'Collaboration & CDE',
     message: 'CDE platform must be specified',
-    severity: 'error',
+    severity: 'required',
     validator: (data) => !!data?.collaboration_cde?.platform?.trim()
   },
 
@@ -114,28 +128,57 @@ export const BEP_VALIDATION_RULES: ValidationRule[] = [
     field: 'clash_detection_tools',
     section: 'Model Checking',
     message: 'At least one clash detection tool must be specified',
-    severity: 'error',
+    severity: 'required',
     validator: (data) => data?.model_checking?.clash_detection_tools?.length > 0
   },
 
-  // File Naming - Warning for best practices
+  // File Naming - Recommended
   {
     field: 'use_conventions',
     section: 'File Naming',
     message: 'File naming conventions should be established for consistency',
-    severity: 'warning',
+    severity: 'recommended',
     validator: (data) => data?.file_naming?.use_conventions === true || !!data?.file_naming?.prefix_format?.trim()
   },
 
-  // Geolocation - Warning
+  // Geolocation - Required for accurate coordination
   {
     field: 'is_georeferenced',
     section: 'Geolocation',
-    message: 'Consider specifying if the project requires georeferencing',
-    severity: 'warning',
+    message: 'Georeferencing status must be specified',
+    severity: 'required',
     validator: (data) => data?.geolocation?.is_georeferenced !== undefined
+  },
+  {
+    field: 'coordinate_system',
+    section: 'Geolocation',
+    message: 'Coordinate system should be specified if georeferenced',
+    severity: 'required',
+    validator: (data) => {
+      if (data?.geolocation?.is_georeferenced === true) {
+        return !!data?.geolocation?.coordinate_system?.trim()
+      }
+      return true // Not required if not georeferenced
+    }
   }
 ]
+
+// Build field-to-validator mapping
+BEP_VALIDATION_RULES.forEach(rule => {
+  const key = `${rule.section}.${rule.field}`
+  if (!FIELD_VALIDATORS[key]) {
+    FIELD_VALIDATORS[key] = []
+  }
+  FIELD_VALIDATORS[key].push(rule)
+})
+
+/**
+ * Get validators for a specific field to enable dynamic validation clearing
+ */
+export function getValidatorsForField(section: string, field: string): ValidationRule[] {
+  const key = `${section}.${field}`
+  return FIELD_VALIDATORS[key] || []
+}
 
 /**
  * Validates project data against all rules
@@ -163,18 +206,20 @@ export function validateProjectData(data: Partial<ProjectData>): ValidationRepor
   validateSoftwareTools(data, issues)
   validateModelingScope(data, issues)
 
-  const hasErrors = issues.some(issue => issue.severity === 'error')
-  const hasWarnings = issues.some(issue => issue.severity === 'warning')
+  const hasErrors = issues.some(issue => issue.severity === 'required')
+  const hasWarnings = issues.some(issue => issue.severity === 'recommended') 
+  const hasInfo = issues.some(issue => issue.severity === 'info')
   
-  // Calculate completeness percentage
-  const totalRequiredFields = BEP_VALIDATION_RULES.filter(rule => rule.severity === 'error').length
-  const completedRequiredFields = totalRequiredFields - issues.filter(issue => issue.severity === 'error').length
+  // Calculate completeness percentage based on REQUIRED fields only
+  const totalRequiredFields = BEP_VALIDATION_RULES.filter(rule => rule.severity === 'required').length
+  const completedRequiredFields = totalRequiredFields - issues.filter(issue => issue.severity === 'required').length
   const completeness = totalRequiredFields > 0 ? Math.round((completedRequiredFields / totalRequiredFields) * 100) : 100
 
   return {
     isValid: !hasErrors,
     hasErrors,
-    hasWarnings, 
+    hasWarnings,
+    hasInfo,
     issues,
     completeness,
     sectionsValidated: Array.from(sectionsValidated)
@@ -194,7 +239,7 @@ function validateTeamFirms(data: Partial<ProjectData>, issues: ValidationIssue[]
         section: 'Team & Responsibilities',
         field: `firms[${index}].name`,
         message: `Firm ${index + 1}: Name is required`,
-        severity: 'error'
+        severity: 'required'
       })
     }
     if (!firm.discipline?.trim()) {
@@ -202,7 +247,7 @@ function validateTeamFirms(data: Partial<ProjectData>, issues: ValidationIssue[]
         section: 'Team & Responsibilities', 
         field: `firms[${index}].discipline`,
         message: `Firm ${index + 1}: Discipline is required`,
-        severity: 'error'
+        severity: 'required'
       })
     }
     if (!firm.bim_lead?.trim()) {
@@ -210,7 +255,7 @@ function validateTeamFirms(data: Partial<ProjectData>, issues: ValidationIssue[]
         section: 'Team & Responsibilities',
         field: `firms[${index}].bim_lead`, 
         message: `Firm ${index + 1}: BIM Lead is required`,
-        severity: 'error'
+        severity: 'required'
       })
     }
     if (!firm.contact_info?.trim()) {
@@ -218,7 +263,7 @@ function validateTeamFirms(data: Partial<ProjectData>, issues: ValidationIssue[]
         section: 'Team & Responsibilities',
         field: `firms[${index}].contact_info`,
         message: `Firm ${index + 1}: Contact information is recommended`,
-        severity: 'warning'
+        severity: 'recommended'
       })
     }
   })
@@ -237,7 +282,7 @@ function validateSoftwareTools(data: Partial<ProjectData>, issues: ValidationIss
         section: 'Software Overview',
         field: `main_tools[${index}].name`,
         message: `Tool ${index + 1}: Name is required`,
-        severity: 'error'
+        severity: 'required'
       })
     }
     if (!tool.version?.trim()) {
@@ -245,7 +290,7 @@ function validateSoftwareTools(data: Partial<ProjectData>, issues: ValidationIss
         section: 'Software Overview',
         field: `main_tools[${index}].version`,
         message: `Tool ${index + 1}: Version is recommended for compatibility`,
-        severity: 'warning'
+        severity: 'recommended'
       })
     }
     if (!tool.discipline?.trim()) {
@@ -253,7 +298,7 @@ function validateSoftwareTools(data: Partial<ProjectData>, issues: ValidationIss
         section: 'Software Overview',
         field: `main_tools[${index}].discipline`,
         message: `Tool ${index + 1}: Discipline assignment is recommended`,
-        severity: 'warning'
+        severity: 'recommended'
       })
     }
   })
@@ -271,7 +316,7 @@ function validateModelingScope(data: Partial<ProjectData>, issues: ValidationIss
       section: 'Modeling Scope',
       field: 'levels_grids_strategy',
       message: 'Levels and grids strategy is recommended',
-      severity: 'warning'
+      severity: 'recommended'
     })
   }
 
@@ -280,13 +325,13 @@ function validateModelingScope(data: Partial<ProjectData>, issues: ValidationIss
       section: 'Modeling Scope',
       field: 'discipline_lods',
       message: 'Discipline-specific LODs are recommended for clarity',
-      severity: 'warning'
+      severity: 'recommended'
     })
   }
 }
 
 /**
- * Quick validation for step navigation
+ * Quick validation for step navigation - only checks REQUIRED fields
  */
 export function validateStep(stepId: string, stepData: any): { isValid: boolean; issues: string[] } {
   const stepValidations: Record<string, (data: any) => string[]> = {
@@ -340,9 +385,17 @@ export function validateStep(stepId: string, stepData: any): { isValid: boolean;
       }
       return issues
     },
-    // Optional steps return no validation issues
+    geolocation: (data) => {
+      const issues: string[] = []
+      if (data?.is_georeferenced === undefined) {
+        issues.push('Georeferencing status must be specified')
+      } else if (data.is_georeferenced === true && !data?.coordinate_system?.trim()) {
+        issues.push('Coordinate system is required when georeferenced')
+      }
+      return issues
+    },
+    // Optional steps return no validation issues for navigation
     naming: () => [],
-    geolocation: () => [],
     outputs: () => []
   }
 
@@ -351,4 +404,11 @@ export function validateStep(stepId: string, stepData: any): { isValid: boolean;
 
   const issues = validator(stepData)
   return { isValid: issues.length === 0, issues }
+}
+
+/**
+ * Clear validation errors for a specific field
+ */
+export function clearFieldValidation(field: string, currentIssues: ValidationIssue[]): ValidationIssue[] {
+  return currentIssues.filter(issue => issue.field !== field)
 }

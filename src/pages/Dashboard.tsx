@@ -97,6 +97,23 @@ const Dashboard = () => {
     
     setCreatingSample(true)
     try {
+      // Check if sample project already exists (idempotent operation)
+      const { data: existingProjects } = await supabase
+        .from('projects')
+        .select('id, name')
+        .eq('owner_id', user.id)
+        .ilike('name', '%sample%')
+        .limit(1)
+      
+      if (existingProjects && existingProjects.length > 0) {
+        toast({
+          title: "Sample Project Exists",
+          description: "You already have a sample project. Opening it now.",
+        })
+        navigate(`/project/${existingProjects[0].id}`)
+        return
+      }
+      
       const projectId = await createSampleBEPProject(user.id)
       
       toast({
@@ -208,7 +225,7 @@ const Dashboard = () => {
               className="w-full sm:w-auto"
             >
               <Sparkles className="h-5 w-5 mr-2" />
-              {creatingSample ? "Creating..." : "Sample Project"}
+              {creatingSample ? "Creating..." : "Create Sample Project (100% Complete)"}
             </Button>
           </div>
         </div>
@@ -233,7 +250,7 @@ const Dashboard = () => {
                   variant="outline"
                 >
                   <Sparkles className="h-4 w-4 mr-2" />
-                  {creatingSample ? "Creating..." : "Create Sample Project"}
+                  {creatingSample ? "Creating..." : "Create Sample Project (100% Complete)"}
                 </Button>
               </div>
             </CardContent>
