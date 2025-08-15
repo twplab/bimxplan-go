@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client"
 import { ProjectData } from "@/lib/supabase"
 import { bepErrorHandler, withBEPErrorHandling, retryWithBackoff } from "./BEPErrorHandler"
+import { validateProjectData } from "./BEPValidationService"
 
 /**
  * Single source of truth for BEP data collection
@@ -131,8 +132,6 @@ interface OutputsData {
  * This removes duplicate validation logic and ensures consistency
  */
 export function validateBepData(data: Partial<ProjectData>): ValidationIssue[] {
-  // Import the centralized validation
-  const { validateProjectData } = require('./BEPValidationService')
   const report = validateProjectData(data)
   return report.issues
 }

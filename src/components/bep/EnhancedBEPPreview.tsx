@@ -17,6 +17,7 @@ import { mapProjectDataToPdfModel, PdfModel } from "./BEPPdfMapper"
 import { renderPdfFromModel, generatePdfFilename, createVersionEntry } from "./BEPPdfRenderer"
 import { bepErrorHandler } from "./BEPErrorHandler"
 import { bepDataEvents, useBEPDataEvents } from "./BEPDataEvents"
+import { validateProjectData } from "./BEPValidationService"
 
 interface BEPPreviewProps {
   data?: Partial<ProjectData>
@@ -67,7 +68,6 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
 
   // Use centralized validation function
   const validateData = useCallback((data: Partial<ProjectData>): ValidationIssue[] => {
-    const { validateProjectData } = require('./BEPValidationService')
     const report = validateProjectData(data)
     return report.issues
   }, [])
