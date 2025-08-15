@@ -66,81 +66,92 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
     return obj
   }
 
-  // Use centralized validation function
+  // Use UNIFIED validation function from centralized collector
   const validateData = useCallback((data: Partial<ProjectData>): ValidationIssue[] => {
+    console.log('[BEP-PREVIEW-VALIDATION] Using unified validation service')
     const report = validateProjectData(data)
     return report.issues
   }, [])
 
   const issues = useMemo(() => validateData(previewData), [validateData, previewData])
 
-  // Enhanced refresh function with single source of truth
+  // UNIFIED refresh using single data source
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing || !projectId) return
-    
+    if (!projectId) {
+      console.warn('[BEP-UNIFIED-PREVIEW] Cannot refresh: no project ID')
+      return
+    }
+
+    if (isRefreshing) {
+      console.log('[BEP-UNIFIED-PREVIEW] Refresh already in progress, skipping')
+      return
+    }
+
+    logAction('UNIFIED_REFRESH_START')
     setIsRefreshing(true)
+
     try {
-      logAction('REFRESH_START', { retry: retryCount > 0, attempt: retryCount + 1 })
-      
-      // Save current data first if onSave is available
-      if (onSave) {
-        logAction('REFRESH_SAVING')
+      // Save current changes if onSave is provided
+      if (onSave && data) {
+        logAction('SAVE_BEFORE_UNIFIED_REFRESH')
         await onSave()
       }
 
-      // Use single source of truth for data collection
-      logAction('REFRESH_FETCHING_UNIFIED_DATA')
-      const freshExportData = await getBepExportData(projectId)
+      // Fetch fresh data using UNIFIED collector
+      console.log('[BEP-UNIFIED-PREVIEW] Fetching fresh data via unified collector')
+      const freshData = await getBepExportData(projectId)
       
-      logAction('REFRESH_DATA_LOADED', {
-        dataSize: JSON.stringify(freshExportData).length,
-        sectionsFound: Object.keys(freshExportData.sections).length,
-        lastUpdated: freshExportData.lastUpdated
+      setExportData(freshData)
+      setPreviewData(freshData)
+      
+      logAction('UNIFIED_REFRESH_SUCCESS', {
+        dataSize: JSON.stringify(freshData).length,
+        sectionsCount: [
+          'projectOverview', 'teamResponsibilities', 'softwareOverview',
+          'modelingScope', 'fileNaming', 'collaborationCDE', 
+          'geolocation', 'modelChecking', 'outputsDeliverables'
+        ].filter(section => freshData[section] && Object.keys(freshData[section]).length > 0).length,
+        validationIssues: freshData.validationIssues?.length || 0,
+        timestamp: new Date().toISOString()
+      })
+
+      toast({
+        title: "Data Refreshed ✓",
+        description: "Live preview updated with latest unified data",
+      })
+
+      // Reset retry count on success
+      setRetryCount(0)
+
+    } catch (error) {
+      logAction('UNIFIED_REFRESH_ERROR', { 
+        error: error.message,
+        attempt: retryCount + 1,
+        maxRetries: 3,
+        source: 'UNIFIED_PREVIEW'
       })
       
-      // Update both preview data and export data
-      setExportData(freshExportData)
-      
-      // Convert export data back to preview format for compatibility
-      const previewCompatibleData: Partial<ProjectData> = {
-        project_overview: freshExportData.sections.overview,
-        team_responsibilities: freshExportData.sections.team,
-        software_overview: freshExportData.sections.software,
-        modeling_scope: freshExportData.sections.modeling,
-        file_naming: freshExportData.sections.naming,
-        collaboration_cde: freshExportData.sections.collaboration,
-        geolocation: freshExportData.sections.geolocation,
-        model_checking: freshExportData.sections.checking,
-        outputs_deliverables: freshExportData.sections.outputs
-      }
-      
-      setPreviewData(previewCompatibleData)
-      setHasAccess(true)
-      setRetryCount(0)
-      logAction('REFRESH_SUCCESS')
-      
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      logAction('REFRESH_ERROR', { error: errorMessage, retryCount })
-      
-      if (errorMessage.includes('access')) {
-        setHasAccess(false)
-      }
+      console.error('[BEP-UNIFIED-PREVIEW] Refresh failed:', error)
       
       if (retryCount < 3) {
         setRetryCount(prev => prev + 1)
-        setTimeout(() => handleRefresh(), 1000 * (retryCount + 1))
-      } else {
         toast({
           title: "Refresh Failed",
-          description: `${errorMessage}. Please try again or contact support.`,
+          description: `Retrying... (${retryCount + 1}/3)`,
           variant: "destructive",
         })
+      } else {
+        toast({
+          title: "Refresh Failed", 
+          description: "Failed to refresh unified data. Please try again.",
+          variant: "destructive",
+        })
+        setHasAccess(false)
       }
     } finally {
       setIsRefreshing(false)
     }
-  }, [isRefreshing, retryCount, projectId, onSave, logAction, toast])
+  }, [projectId, isRefreshing, onSave, data, logAction, retryCount])
 
   // Enhanced PDF generation with soft-gating validation
   const generateComprehensivePDF = useCallback(async () => {
@@ -169,8 +180,8 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
         await ensureLatestSave(projectId, previewData)
       }
       
-      // Step 2: Collect fresh data using single source of truth
-      logAction('PDF_COLLECT_DATA')
+      // Step 2: Collect fresh data using unified collector
+      logAction('PDF_GENERATION_UNIFIED_COLLECT_DATA')
       const freshExportData = await getBepExportData(projectId)
       
       // Step 3: Map to clean PDF model
@@ -216,18 +227,18 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
     }
   }, [exporting, projectId, previewData, onSave, logAction, toast, issues])
 
-  // Complete Live Preview component using export data source
+  // Complete Live Preview component using unified export data source
   const renderLivePreview = () => {
-    // Type-safe access to both export data and preview data
-    const getProjectOverview = () => exportData?.sections.overview || (previewData as Partial<ProjectData>).project_overview
-    const getTeamData = () => exportData?.sections.team || (previewData as Partial<ProjectData>).team_responsibilities
-    const getSoftwareData = () => exportData?.sections.software || (previewData as Partial<ProjectData>).software_overview
-    const getModelingData = () => exportData?.sections.modeling || (previewData as Partial<ProjectData>).modeling_scope
-    const getNamingData = () => exportData?.sections.naming || (previewData as Partial<ProjectData>).file_naming
-    const getCollaborationData = () => exportData?.sections.collaboration || (previewData as Partial<ProjectData>).collaboration_cde
-    const getGeolocationData = () => exportData?.sections.geolocation || (previewData as Partial<ProjectData>).geolocation
-    const getCheckingData = () => exportData?.sections.checking || (previewData as Partial<ProjectData>).model_checking
-    const getOutputsData = () => exportData?.sections.outputs || (previewData as Partial<ProjectData>).outputs_deliverables
+    // Use unified data structure - direct access to sections
+    const getProjectOverview = () => exportData?.projectOverview || (previewData as Partial<ProjectData>).project_overview
+    const getTeamData = () => exportData?.teamResponsibilities || (previewData as Partial<ProjectData>).team_responsibilities
+    const getSoftwareData = () => exportData?.softwareOverview || (previewData as Partial<ProjectData>).software_overview
+    const getModelingData = () => exportData?.modelingScope || (previewData as Partial<ProjectData>).modeling_scope
+    const getNamingData = () => exportData?.fileNaming || (previewData as Partial<ProjectData>).file_naming
+    const getCollaborationData = () => exportData?.collaborationCDE || (previewData as Partial<ProjectData>).collaboration_cde
+    const getGeolocationData = () => exportData?.geolocation || (previewData as Partial<ProjectData>).geolocation
+    const getCheckingData = () => exportData?.modelChecking || (previewData as Partial<ProjectData>).model_checking
+    const getOutputsData = () => exportData?.outputsDeliverables || (previewData as Partial<ProjectData>).outputs_deliverables
     
     return (
       <ScrollArea className="h-[600px] border rounded-lg p-6 bg-background">
@@ -239,7 +250,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
               {exportData?.projectName || getProjectOverview()?.project_name || 'Project Name Not Set'}
             </p>
             <p className="text-xs text-muted-foreground mt-2">
-              Last Updated: {exportData?.lastUpdated ? new Date(exportData.lastUpdated).toLocaleString() : 'Not saved'}
+              Last Updated: {exportData?.updatedAt ? new Date(exportData.updatedAt).toLocaleString() : 'Not saved'}
             </p>
           </div>
 
@@ -457,8 +468,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
               <div>Generated: {new Date().toLocaleString()}</div>
               {projectId && <div>Project ID: {projectId}</div>}
               {exportData && <div>Data Size: {JSON.stringify(exportData).length} characters</div>}
-              {exportData && <div>Sections: {Object.keys(exportData.sections).length}</div>}
-              {exportData?.validationIssues && <div>Validation Issues: {exportData.validationIssues.length}</div>}
+              {exportData && <div>Validation Issues: {exportData.validationIssues.length}</div>}
             </div>
           </section>
         </div>
@@ -512,7 +522,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
             {isRefreshing ? 'Refreshing...' : 'Refresh Preview'}
           </Button>
           
-            <Button
+          <Button
             onClick={generateComprehensivePDF}
             disabled={exporting || !hasAccess}
             variant="default"

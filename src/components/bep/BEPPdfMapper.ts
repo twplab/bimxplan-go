@@ -153,8 +153,8 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
 
   const model: PdfModel = {
     header: {
-      projectName: safe(data.sections.overview.project_name) || 'Untitled Project',
-      clientName: safe(data.sections.overview.client_name) || 'Client Not Specified',
+      projectName: safe(data.projectOverview?.project_name) || 'Untitled Project',
+      clientName: safe(data.projectOverview?.client_name) || 'Client Not Specified', 
       generatedDate: new Date().toLocaleDateString(),
       projectId: data.projectId
     },
@@ -162,7 +162,7 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
   }
 
   // 1. Project Overview - Always include if basic project info exists
-  const overview = data.sections.overview
+  const overview = data.projectOverview
   if (overview && (hasContent(overview.project_name) || hasContent(overview.client_name) || 
       hasContent(overview.location) || hasContent(overview.project_type) ||
       nonEmpty(overview.key_milestones))) {
@@ -185,7 +185,7 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
   }
 
   // 2. Team & Responsibilities - Include if any team data exists
-  const team = data.sections.team
+  const team = data.teamResponsibilities
   if (team && nonEmpty(team.firms)) {
     const validFirms = team.firms
       .filter(f => hasContent(f.name) || hasContent(f.discipline) || hasContent(f.bim_lead))

@@ -185,10 +185,16 @@ function getSectionKey(stepId: string): string {
 
 /**
  * Checks if a specific field is complete for a given step
+ * Fixed to match actual ProjectData structure
  */
 function isFieldComplete(sectionData: any, field: string, stepId: string): boolean {
-  if (!sectionData) return false
+  if (!sectionData) {
+    console.log(`[BEP-PROGRESS-DEBUG] No section data for field: ${field} in step: ${stepId}`)
+    return false
+  }
 
+  let result = false
+  
   switch (field) {
     case 'project_name':
     case 'client_name':
@@ -196,27 +202,43 @@ function isFieldComplete(sectionData: any, field: string, stepId: string): boole
     case 'units':
     case 'platform':
     case 'coordinate_system':
-      return !!(sectionData[field]?.trim())
+      result = !!(sectionData[field]?.trim())
+      break
       
     case 'firms':
-      return Array.isArray(sectionData.firms) && sectionData.firms.length > 0 &&
-             sectionData.firms.some((firm: any) => firm.name?.trim() && firm.discipline?.trim() && firm.bim_lead?.trim())
+      result = Array.isArray(sectionData.firms) && sectionData.firms.length > 0 &&
+               sectionData.firms.some((firm: any) => firm.name?.trim() && firm.discipline?.trim() && firm.bim_lead?.trim())
+      break
              
     case 'main_tools':
-      return Array.isArray(sectionData.main_tools) && sectionData.main_tools.length > 0 &&
-             sectionData.main_tools.some((tool: any) => tool.name?.trim())
+      result = Array.isArray(sectionData.main_tools) && sectionData.main_tools.length > 0 &&
+               sectionData.main_tools.some((tool: any) => tool.name?.trim())
+      break
              
     case 'clash_detection_tools':
-      return Array.isArray(sectionData.clash_detection_tools) && sectionData.clash_detection_tools.length > 0
+      result = Array.isArray(sectionData.clash_detection_tools) && sectionData.clash_detection_tools.length > 0
+      break
       
     case 'is_georeferenced':
-      return sectionData.is_georeferenced !== undefined && sectionData.is_georeferenced !== null && sectionData.coordinate_system?.trim()
+      result = sectionData.is_georeferenced !== undefined && sectionData.is_georeferenced !== null && 
+               sectionData.coordinate_system?.trim()
+      break
       
     case 'deliverables_by_phase':
-      return Array.isArray(sectionData.deliverables_by_phase) && sectionData.deliverables_by_phase.length > 0 &&
-             sectionData.deliverables_by_phase.some((phase: any) => phase.phase?.trim() || phase.deliverables?.length > 0)
+      result = Array.isArray(sectionData.deliverables_by_phase) && sectionData.deliverables_by_phase.length > 0 &&
+               sectionData.deliverables_by_phase.some((phase: any) => phase.phase?.trim() || phase.deliverables?.length > 0)
+      break
              
     default:
-      return false
+      console.log(`[BEP-PROGRESS-DEBUG] Unknown field: ${field}`)
+      result = false
   }
+  
+  console.log(`[BEP-PROGRESS-DEBUG] Field check: ${field} = ${result}`, {
+    stepId,
+    hasData: !!sectionData,
+    fieldValue: sectionData[field]
+  })
+  
+  return result
 }
