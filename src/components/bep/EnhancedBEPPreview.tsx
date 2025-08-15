@@ -16,6 +16,7 @@ import { getBepExportData, ensureLatestSave, BEPExportData, ValidationIssue, val
 import { mapProjectDataToPdfModel, PdfModel } from "./BEPPdfMapper"
 import { renderPdfFromModel, generatePdfFilename, createVersionEntry } from "./BEPPdfRenderer"
 import { bepErrorHandler } from "./BEPErrorHandler"
+import { bepDataEvents, useBEPDataEvents } from "./BEPDataEvents"
 
 interface BEPPreviewProps {
   data?: Partial<ProjectData>
@@ -34,6 +35,13 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   const [previewData, setPreviewData] = useState<Partial<ProjectData>>(baseData)
   const [exportData, setExportData] = useState<BEPExportData | null>(null)
   const { toast } = useToast()
+  
+  // Subscribe to data update events to keep preview in sync
+  useBEPDataEvents('bep:data-updated', (event) => {
+    if (event.projectId === projectId) {
+      handleRefresh()
+    }
+  }, projectId)
   
   // Enhanced logging function using centralized error handler
   const logAction = useCallback((action: string, data?: any) => {

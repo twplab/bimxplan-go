@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { supabase } from "@/integrations/supabase/client"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, FileText, Users, Calendar, Settings, LogOut } from "lucide-react"
+import { Plus, FileText, Users, Calendar, Settings, LogOut, Sparkles } from "lucide-react"
+import { createSampleBEPProject } from "@/components/bep/BEPSampleProject"
 import { Separator } from "@/components/ui/separator"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/AppSidebar"
@@ -27,6 +28,7 @@ interface Project {
 const Dashboard = () => {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
+  const [creatingSample, setCreatingSample] = useState(false)
   const { user, signOut } = useAuth()
   const { toast } = useToast()
   const navigate = useNavigate()
@@ -87,6 +89,34 @@ const Dashboard = () => {
         description: error.message,
         variant: "destructive",
       })
+    }
+  }
+
+  const createSampleProject = async () => {
+    if (!user?.id) return
+    
+    setCreatingSample(true)
+    try {
+      const projectId = await createSampleBEPProject(user.id)
+      
+      toast({
+        title: "Sample Project Created",
+        description: "A 100% complete sample BEP project has been created for you to explore.",
+      })
+      
+      // Refresh projects list
+      await fetchProjects()
+      
+      // Navigate to the new sample project
+      navigate(`/project/${projectId}`)
+    } catch (error: any) {
+      toast({
+        title: "Error creating sample project",
+        description: error.message,
+        variant: "destructive",
+      })
+    } finally {
+      setCreatingSample(false)
     }
   }
 
@@ -165,10 +195,24 @@ const Dashboard = () => {
               Manage your BIM Execution Plans and collaborate with your team
             </p>
           </div>
-          <Button onClick={createNewProject} size="lg" className="w-full sm:w-auto">
-            <Plus className="h-5 w-5 mr-2" />
-            New Project
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button onClick={createNewProject} size="lg" className="w-full sm:w-auto">
+              <Plus className="h-5 w-5 mr-2" />
+              New Project
+            </Button>
+            {projects.length === 0 && (
+              <Button 
+                onClick={createSampleProject}
+                disabled={creatingSample}
+                variant="outline" 
+                size="lg" 
+                className="w-full sm:w-auto"
+              >
+                <Sparkles className="h-5 w-5 mr-2" />
+                {creatingSample ? "Creating..." : "Sample Project"}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Projects Grid */}
@@ -178,12 +222,22 @@ const Dashboard = () => {
               <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2">No projects yet</h3>
               <p className="text-muted-foreground mb-6">
-                Create your first BIM Execution Plan to get started
+                Create your first BIM Execution Plan to get started, or explore a complete sample project
               </p>
-              <Button onClick={createNewProject}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Your First Project
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Button onClick={createNewProject}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Your First Project
+                </Button>
+                <Button 
+                  onClick={createSampleProject}
+                  disabled={creatingSample}
+                  variant="outline"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  {creatingSample ? "Creating..." : "Create Sample Project"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ) : (

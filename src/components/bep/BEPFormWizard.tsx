@@ -18,6 +18,8 @@ import { ProjectData } from "@/lib/supabase"
 import { toast } from "@/hooks/use-toast"
 import { supabase } from "@/integrations/supabase/client"
 import { validateStep, validateProjectData, ValidationReport } from "./BEPValidationService"
+import { computeBepProgress, BEPProgress } from "./BEPProgressCalculator"
+import { bepDataEvents } from "./BEPDataEvents"
 
 interface BEPFormWizardProps {
   onClose: () => void
@@ -49,11 +51,13 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
   const [projectData, setProjectData] = useState<Partial<ProjectData>>(initialData)
   const [stepValidations, setStepValidations] = useState<Record<string, StepValidation>>({})
   const [validationReport, setValidationReport] = useState<ValidationReport | null>(null)
+  const [progressData, setProgressData] = useState<BEPProgress | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [autoSaveTimeout, setAutoSaveTimeout] = useState<NodeJS.Timeout | null>(null)
 
-  const progress = ((currentStep + 1) / STEPS.length) * 100
+  const stepProgress = ((currentStep + 1) / STEPS.length) * 100
+  const dataProgress = progressData?.overallPercent || 0
 
   // Enhanced logging
   const logAction = useCallback((action: string, data?: any) => {
@@ -76,12 +80,23 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
     return validateStep(stepId, stepData)
   }, [])
 
-  // Update validation report when project data changes
+  // Update validation report and progress when project data changes
   const updateValidationReport = useCallback((data: Partial<ProjectData>) => {
     const report = validateProjectData(data)
     setValidationReport(report)
+    
+    // Calculate progress using the new progress calculator
+    const progress = computeBepProgress(data)
+    setProgressData(progress)
+    
+    // Emit events for other components to update
+    if (projectId) {
+      bepDataEvents.emit('bep:validation-updated', projectId, report)
+      bepDataEvents.emit('bep:progress-updated', projectId, progress)
+    }
+    
     return report
-  }, [])
+  }, [projectId])
 
   // Auto-save functionality
   const triggerAutoSave = useCallback(async (data: Partial<ProjectData>) => {
@@ -148,8 +163,13 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
       [stepKey]: validation
     }))
     
-    // Update overall validation report
+    // Update overall validation report and progress
     updateValidationReport(updatedData)
+    
+    // Emit data update event
+    if (projectId) {
+      bepDataEvents.emit('bep:data-updated', projectId, updatedData)
+    }
     
     // Trigger auto-save
     triggerAutoSave(updatedData)
@@ -236,10 +256,25 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
 
         {/* Progress & Status */}
         <div className="mb-8">
-          <Progress value={progress} className="mb-4" />
-          <div className="flex justify-between items-center text-sm">
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Step Progress</span>
+              <span>{Math.round(stepProgress)}%</span>
+            </div>
+            <Progress value={stepProgress} className="h-2" />
+            
+            <div className="flex justify-between text-sm">
+              <span>Data Completion</span>
+              <span>{dataProgress}%</span>
+            </div>
+            <Progress value={dataProgress} className="h-3" />
+          </div>
+          
+          <div className="flex justify-between items-center text-sm mt-4">
             <div className="flex items-center space-x-4">
-              <span className="text-muted-foreground">Progress: {Math.round(progress)}%</span>
+              <span className="text-muted-foreground">
+                {progressData ? `${progressData.completedSteps}/${progressData.totalSteps} steps` : 'Calculating...'}
+              </span>
               {validationReport && (
                 <div className="flex items-center space-x-1 text-xs">
                   <Badge variant={validationReport.hasErrors ? "destructive" : validationReport.hasWarnings ? "secondary" : "default"}>
@@ -260,7 +295,19 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
                 </div>
               )}
             </div>
-            <span className="text-muted-foreground">{currentStep + 1} / {STEPS.length}</span>
+            <div className="flex items-center space-x-2">
+              <span className="text-muted-foreground">{currentStep + 1} / {STEPS.length}</span>
+              {progressData && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => updateValidationReport(projectData)}
+                  className="text-xs px-2 py-1"
+                >
+                  Recompute
+                </Button>
+              )}
+            </div>
           </div>
           
           {/* Step Navigation Pills */}
