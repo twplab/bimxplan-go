@@ -57,7 +57,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
   }, [projectId, hasAccess, baseData, retryCount])
 
   // Data mapping layer to safely handle empty/undefined fields
-  const safeMap = (obj: any, fallback = 'Not specified') => {
+  const safeMap = (obj: any, fallback = '—') => {
     if (obj === null || obj === undefined) return fallback
     if (typeof obj === 'boolean') return obj ? 'Yes' : 'No'
     if (typeof obj === 'string' && obj.trim() === '') return fallback
@@ -67,7 +67,9 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
 
   // Use centralized validation function
   const validateData = useCallback((data: Partial<ProjectData>): ValidationIssue[] => {
-    return validateBepData(data)
+    const { validateProjectData } = require('./BEPValidationService')
+    const report = validateProjectData(data)
+    return report.issues
   }, [])
 
   const issues = useMemo(() => validateData(previewData), [validateData, previewData])

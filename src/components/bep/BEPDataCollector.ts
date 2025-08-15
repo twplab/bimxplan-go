@@ -127,78 +127,14 @@ interface OutputsData {
 }
 
 /**
- * Comprehensive validation function for BEP data
+ * Use centralized validation from BEPValidationService.ts
+ * This removes duplicate validation logic and ensures consistency
  */
 export function validateBepData(data: Partial<ProjectData>): ValidationIssue[] {
-  const issues: ValidationIssue[] = []
-  
-  // Project Overview validation
-  const overview = data?.project_overview
-  if (!overview?.project_name?.trim()) {
-    issues.push({ section: "Project Overview", field: "project_name", message: "Project name is required", severity: "error" })
-  }
-  if (!overview?.client_name?.trim()) {
-    issues.push({ section: "Project Overview", field: "client_name", message: "Client name is required", severity: "error" })
-  }
-  if (!overview?.location?.trim()) {
-    issues.push({ section: "Project Overview", field: "location", message: "Location is required", severity: "error" })
-  }
-  if (!overview?.project_type?.trim()) {
-    issues.push({ section: "Project Overview", field: "project_type", message: "Project type is required", severity: "error" })
-  }
-  
-  // Team validation
-  const team = data?.team_responsibilities
-  if (!team?.firms || team.firms.length === 0) {
-    issues.push({ section: "Team & Responsibilities", field: "firms", message: "At least one firm must be defined", severity: "error" })
-  } else {
-    team.firms.forEach((firm, index) => {
-      if (!firm.name?.trim()) {
-        issues.push({ section: "Team & Responsibilities", field: `firms[${index}].name`, message: `Firm ${index + 1} name is required`, severity: "error" })
-      }
-      if (!firm.discipline?.trim()) {
-        issues.push({ section: "Team & Responsibilities", field: `firms[${index}].discipline`, message: `Firm ${index + 1} discipline is required`, severity: "error" })
-      }
-      if (!firm.bim_lead?.trim()) {
-        issues.push({ section: "Team & Responsibilities", field: `firms[${index}].bim_lead`, message: `Firm ${index + 1} BIM lead is required`, severity: "error" })
-      }
-    })
-  }
-  
-  // Software validation
-  const software = data?.software_overview
-  if (!software?.main_tools || software.main_tools.length === 0) {
-    issues.push({ section: "Software Overview", field: "main_tools", message: "At least one main BIM tool must be defined", severity: "error" })
-  } else {
-    software.main_tools.forEach((tool, index) => {
-      if (!tool.name?.trim()) {
-        issues.push({ section: "Software Overview", field: `main_tools[${index}].name`, message: `Tool ${index + 1} name is required`, severity: "error" })
-      }
-    })
-  }
-  
-  // Modeling scope validation
-  const modeling = data?.modeling_scope
-  if (!modeling?.general_lod?.trim()) {
-    issues.push({ section: "Modeling Scope", field: "general_lod", message: "General LOD is required", severity: "error" })
-  }
-  if (!modeling?.units?.trim()) {
-    issues.push({ section: "Modeling Scope", field: "units", message: "Units specification is required", severity: "error" })
-  }
-  
-  // Collaboration validation
-  const collaboration = data?.collaboration_cde
-  if (!collaboration?.platform?.trim()) {
-    issues.push({ section: "Collaboration & CDE", field: "platform", message: "CDE platform is required", severity: "error" })
-  }
-  
-  // Model checking validation
-  const checking = data?.model_checking
-  if (!checking?.clash_detection_tools || checking.clash_detection_tools.length === 0) {
-    issues.push({ section: "Model Checking", field: "clash_detection_tools", message: "At least one clash detection tool must be specified", severity: "error" })
-  }
-  
-  return issues
+  // Import the centralized validation
+  const { validateProjectData } = require('./BEPValidationService')
+  const report = validateProjectData(data)
+  return report.issues
 }
 
 /**

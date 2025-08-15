@@ -200,18 +200,16 @@ const Dashboard = () => {
               <Plus className="h-5 w-5 mr-2" />
               New Project
             </Button>
-            {projects.length === 0 && (
-              <Button 
-                onClick={createSampleProject}
-                disabled={creatingSample}
-                variant="outline" 
-                size="lg" 
-                className="w-full sm:w-auto"
-              >
-                <Sparkles className="h-5 w-5 mr-2" />
-                {creatingSample ? "Creating..." : "Sample Project"}
-              </Button>
-            )}
+            <Button 
+              onClick={createSampleProject}
+              disabled={creatingSample}
+              variant="outline" 
+              size="lg" 
+              className="w-full sm:w-auto"
+            >
+              <Sparkles className="h-5 w-5 mr-2" />
+              {creatingSample ? "Creating..." : "Sample Project"}
+            </Button>
           </div>
         </div>
 

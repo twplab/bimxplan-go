@@ -85,9 +85,32 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
     const report = validateProjectData(data)
     setValidationReport(report)
     
+    console.log('[BEP-VALIDATION-DEBUG]', {
+      timestamp: new Date().toISOString(),
+      projectId,
+      validationPaths: report.issues.map(i => `${i.section}.${i.field}`),
+      completeness: report.completeness,
+      totalIssues: report.issues.length,
+      criticalErrors: report.issues.filter(i => i.severity === 'error').length
+    })
+    
     // Calculate progress using the new progress calculator
     const progress = computeBepProgress(data)
     setProgressData(progress)
+    
+    console.log('[BEP-PROGRESS-DEBUG]', {
+      timestamp: new Date().toISOString(),
+      projectId,
+      overallPercent: progress.overallPercent,
+      completedSteps: progress.completedSteps,
+      totalSteps: progress.totalSteps,
+      stepBreakdown: progress.perStep.map(s => ({
+        step: s.step,
+        title: s.title,
+        complete: s.complete,
+        percent: s.percent
+      }))
+    })
     
     // Emit events for other components to update
     if (projectId) {

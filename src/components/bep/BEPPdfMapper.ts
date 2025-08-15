@@ -161,11 +161,11 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
     sections: {}
   }
 
-  // 1. Project Overview
+  // 1. Project Overview - Always include if basic project info exists
   const overview = data.sections.overview
-  if (hasContent(overview.project_name) || hasContent(overview.client_name) || 
+  if (overview && (hasContent(overview.project_name) || hasContent(overview.client_name) || 
       hasContent(overview.location) || hasContent(overview.project_type) ||
-      nonEmpty(overview.key_milestones)) {
+      nonEmpty(overview.key_milestones))) {
     
     model.sections.overview = {
       projectName: safe(overview.project_name),
@@ -184,9 +184,9 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
     }
   }
 
-  // 2. Team & Responsibilities
+  // 2. Team & Responsibilities - Include if any team data exists
   const team = data.sections.team
-  if (nonEmpty(team.firms)) {
+  if (team && nonEmpty(team.firms)) {
     const validFirms = team.firms
       .filter(f => hasContent(f.name) || hasContent(f.discipline) || hasContent(f.bim_lead))
       .map(f => ({
@@ -201,9 +201,9 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
     }
   }
 
-  // 3. Software Overview
-  const software = data.sections.software
-  if (nonEmpty(software.main_tools) || nonEmpty(software.team_specific_tools)) {
+  // 3. Software Overview - Include if any software data exists
+  const software = data.sections.software  
+  if (software && (nonEmpty(software.main_tools) || nonEmpty(software.team_specific_tools))) {
     const mainTools = nonEmpty(software.main_tools)
       ? software.main_tools
           .filter(t => hasContent(t.name))
@@ -231,11 +231,11 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
     }
   }
 
-  // 4. Modeling Scope
+  // 4. Modeling Scope - Include if any modeling data exists
   const modeling = data.sections.modeling
-  if (hasContent(modeling.general_lod) || hasContent(modeling.units) || 
+  if (modeling && (hasContent(modeling.general_lod) || hasContent(modeling.units) || 
       hasContent(modeling.levels_grids_strategy) || nonEmpty(modeling.discipline_lods) ||
-      nonEmpty(modeling.exceptions)) {
+      nonEmpty(modeling.exceptions))) {
     
     model.sections.modeling = {
       generalLod: safe(modeling.general_lod),
@@ -256,11 +256,11 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
     }
   }
 
-  // 5. File Naming (optional section)
+  // 5. File Naming - Include if any naming data exists
   const naming = data.sections.naming
-  if (naming.use_conventions || hasContent(naming.prefix_format) || 
+  if (naming && (naming.use_conventions || hasContent(naming.prefix_format) || 
       hasContent(naming.discipline_codes) || hasContent(naming.versioning_format) ||
-      nonEmpty(naming.examples)) {
+      nonEmpty(naming.examples))) {
     
     model.sections.naming = {
       useConventions: naming.use_conventions,
@@ -273,11 +273,11 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
     }
   }
 
-  // 6. Collaboration & CDE
+  // 6. Collaboration & CDE - Include if any collaboration data exists
   const collab = data.sections.collaboration
-  if (hasContent(collab.platform) || hasContent(collab.file_linking_method) ||
+  if (collab && (hasContent(collab.platform) || hasContent(collab.file_linking_method) ||
       hasContent(collab.sharing_frequency) || hasContent(collab.setup_responsibility) ||
-      hasContent(collab.access_controls)) {
+      hasContent(collab.access_controls))) {
     
     model.sections.collaboration = {
       platform: safe(collab.platform),
@@ -288,10 +288,10 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
     }
   }
 
-  // 7. Geolocation
+  // 7. Geolocation - Include if any geolocation data exists
   const geo = data.sections.geolocation
-  if (geo.is_georeferenced || hasContent(geo.coordinate_setup) ||
-      hasContent(geo.origin_location) || hasContent(geo.coordinate_system)) {
+  if (geo && (geo.is_georeferenced !== undefined || hasContent(geo.coordinate_setup) ||
+      hasContent(geo.origin_location) || hasContent(geo.coordinate_system))) {
     
     model.sections.geolocation = {
       isGeoreferenced: geo.is_georeferenced,
@@ -301,10 +301,10 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
     }
   }
 
-  // 8. Model Checking
+  // 8. Model Checking - Include if any checking data exists
   const checking = data.sections.checking
-  if (nonEmpty(checking.clash_detection_tools) || hasContent(checking.coordination_process) ||
-      hasContent(checking.meeting_frequency) || hasContent(checking.responsibility_matrix)) {
+  if (checking && (nonEmpty(checking.clash_detection_tools) || hasContent(checking.coordination_process) ||
+      hasContent(checking.meeting_frequency) || hasContent(checking.responsibility_matrix))) {
     
     model.sections.checking = {
       clashDetectionTools: nonEmpty(checking.clash_detection_tools)
@@ -316,10 +316,10 @@ export function mapProjectDataToPdfModel(data: BEPExportData): PdfModel {
     }
   }
 
-  // 9. Outputs & Deliverables
+  // 9. Outputs & Deliverables - Include if any output data exists  
   const outputs = data.sections.outputs
-  if (nonEmpty(outputs.deliverables_by_phase) || nonEmpty(outputs.formats_standards) ||
-      nonEmpty(outputs.milestone_schedule)) {
+  if (outputs && (nonEmpty(outputs.deliverables_by_phase) || nonEmpty(outputs.formats_standards) ||
+      nonEmpty(outputs.milestone_schedule))) {
     
     model.sections.outputs = {
       deliverablesByPhase: nonEmpty(outputs.deliverables_by_phase)

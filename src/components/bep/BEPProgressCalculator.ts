@@ -210,11 +210,11 @@ function isFieldComplete(sectionData: any, field: string, stepId: string): boole
       return Array.isArray(sectionData.clash_detection_tools) && sectionData.clash_detection_tools.length > 0
       
     case 'is_georeferenced':
-      return sectionData.is_georeferenced !== undefined && sectionData.is_georeferenced !== null
+      return sectionData.is_georeferenced !== undefined && sectionData.is_georeferenced !== null && sectionData.coordinate_system?.trim()
       
     case 'deliverables_by_phase':
       return Array.isArray(sectionData.deliverables_by_phase) && sectionData.deliverables_by_phase.length > 0 &&
-             sectionData.deliverables_by_phase.some((phase: any) => phase.phase?.trim() && phase.deliverables?.length > 0)
+             sectionData.deliverables_by_phase.some((phase: any) => phase.phase?.trim() || phase.deliverables?.length > 0)
              
     default:
       return false
