@@ -158,7 +158,7 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
     if (exporting || !projectId) return
     
     // Check for critical errors and show confirmation dialog
-    const criticalErrors = issues.filter(i => i.severity === 'error')
+    const criticalErrors = issues.filter(i => i.severity === 'required')
     if (criticalErrors.length > 0) {
       const shouldProceed = window.confirm(
         `Some required fields are missing (${criticalErrors.length} error${criticalErrors.length !== 1 ? 's' : ''}).\n\nGenerate PDF anyway?`
@@ -496,9 +496,9 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
           <div className="flex items-center space-x-4 text-sm text-muted-foreground">
             <span>Data Size: {JSON.stringify(previewData).length} chars</span>
             {issues.length > 0 && (
-              <Badge variant={issues.some(i => i.severity === 'error') ? "destructive" : "secondary"} className="text-xs">
-                {issues.filter(i => i.severity === 'error').length} error{issues.filter(i => i.severity === 'error').length !== 1 ? 's' : ''}
-                {issues.filter(i => i.severity === 'warning').length > 0 && `, ${issues.filter(i => i.severity === 'warning').length} warning${issues.filter(i => i.severity === 'warning').length !== 1 ? 's' : ''}`}
+              <Badge variant={issues.some(i => i.severity === 'required') ? "destructive" : "secondary"} className="text-xs">
+                {issues.filter(i => i.severity === 'required').length} error{issues.filter(i => i.severity === 'required').length !== 1 ? 's' : ''}
+                {issues.filter(i => i.severity === 'recommended' || i.severity === 'info').length > 0 && `, ${issues.filter(i => i.severity === 'recommended' || i.severity === 'info').length} warning${issues.filter(i => i.severity === 'recommended' || i.severity === 'info').length !== 1 ? 's' : ''}`}
               </Badge>
             )}
             {hasAccess && (
@@ -537,24 +537,24 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
 
       {/* Validation Issues */}
       {issues.length > 0 && (
-        <Alert variant={issues.some(i => i.severity === 'error') ? "destructive" : "default"}>
+        <Alert variant={issues.some(i => i.severity === 'required') ? "destructive" : "default"}>
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>
-            {issues.some(i => i.severity === 'error') ? 'Validation Errors' : 'Validation Warnings'}
+            {issues.some(i => i.severity === 'required') ? 'Validation Errors' : 'Validation Warnings'}
           </AlertTitle>
           <AlertDescription>
             <div className="space-y-2 mt-2">
-              {issues.filter(i => i.severity === 'error').map((issue, index) => (
+              {issues.filter(i => i.severity === 'required').map((issue, index) => (
                 <div key={`error-${index}`} className="text-sm p-2 bg-destructive/10 rounded border-l-2 border-destructive">
                   <strong className="text-destructive">{issue.section}:</strong> {issue.message}
                 </div>
               ))}
-              {issues.filter(i => i.severity === 'warning').map((issue, index) => (
+              {issues.filter(i => i.severity === 'recommended' || i.severity === 'info').map((issue, index) => (
                 <div key={`warning-${index}`} className="text-sm p-2 bg-yellow-50 rounded border-l-2 border-yellow-400">
                   <strong className="text-yellow-700">{issue.section}:</strong> {issue.message}
                 </div>
               ))}
-              {issues.some(i => i.severity === 'error') && (
+              {issues.some(i => i.severity === 'required') && (
                 <div className="text-sm text-muted-foreground mt-2">
                   <strong>Note:</strong> PDF can be generated with incomplete data. A confirmation dialog will appear if errors exist.
                 </div>

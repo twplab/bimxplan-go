@@ -70,8 +70,8 @@ export function validateBepData(data: Partial<ProjectData>): ValidationIssue[] {
   
   console.log('[BEP-UNIFIED-VALIDATION] Validation completed:', {
     totalIssues: report.issues.length,
-    errorCount: report.issues.filter(i => i.severity === 'error').length,
-    warningCount: report.issues.filter(i => i.severity === 'warning').length,
+    errorCount: report.issues.filter(i => i.severity === 'required').length,
+    warningCount: report.issues.filter(i => i.severity === 'recommended' || i.severity === 'info').length,
     completeness: report.completeness,
     isValid: report.isValid
   })
@@ -133,8 +133,8 @@ export async function getBepExportData(projectId: string): Promise<BEPExportData
     
     console.log('[BEP-UNIFIED-COLLECTOR] Unified validation completed:', {
       totalIssues: validationIssues.length,
-      errors: validationIssues.filter(i => i.severity === 'error').length,
-      warnings: validationIssues.filter(i => i.severity === 'warning').length,
+      errors: validationIssues.filter(i => i.severity === 'required').length,
+      warnings: validationIssues.filter(i => i.severity === 'recommended' || i.severity === 'info').length,
       dataFields: Object.keys(projectData)
     })
 
