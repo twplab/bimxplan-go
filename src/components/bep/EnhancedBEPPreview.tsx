@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Download, FileText, Eye, RotateCw, Settings, Globe, CheckCircle, FileArchive, Layers, Code, Building, Users, MapPin, AlertCircle } from "lucide-react"
+import { Download, FileText, Eye, RotateCw, Settings, Globe, CheckCircle, FileArchive, Layers, Code, Building, Users, MapPin, AlertCircle, Sparkles } from "lucide-react"
 import { ProjectData } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import jsPDF from 'jspdf'
@@ -18,6 +18,7 @@ import { renderPdfFromModel, generatePdfFilename, createVersionEntry } from "./B
 import { bepErrorHandler } from "./BEPErrorHandler"
 import { bepDataEvents, useBEPDataEvents } from "./BEPDataEvents"
 import { validateProjectData } from "./BEPValidationService"
+import { BIMxPlanGenerator } from "./BIMxPlanGenerator"
 
 interface BEPPreviewProps {
   data?: Partial<ProjectData>
@@ -574,6 +575,17 @@ export function EnhancedBEPPreview({ data, projectData, projectId, onSave }: BEP
           </AlertDescription>
         </Alert>
       )}
+
+      {/* AI Plan Generator */}
+      <BIMxPlanGenerator 
+        projectData={previewData} 
+        onPlanGenerated={(plan) => {
+          toast({
+            title: "AI Plan Generated",
+            description: "Complete BIM execution plan has been generated using AI."
+          });
+        }}
+      />
 
       {/* Live Preview */}
       <Card>
