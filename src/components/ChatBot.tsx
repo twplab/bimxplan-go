@@ -94,10 +94,11 @@ export function ChatBot({ className }: ChatBotProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch("https://acla-agent-runner.fly.dev/prompt/uuid/BIM Consultation Chat", {
+      const response = await fetch("https://agent.kith.build/prompt/131a6e97-bf6f-4b23-8886-961e4a1c1c55", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": "Bearer sk-3b_8o8TQqdkE9j6PIpOhTKBTGm152H91E7EI2juDqHU",
         },
         body: JSON.stringify({
           agent_uuid: "df6fc674-7e44-49bd-9829-d6554e069c9e",
