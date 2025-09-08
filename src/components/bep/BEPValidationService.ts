@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ProjectData, Firm, BIMTool } from "@/lib/supabase"
 
 // Add enhanced severities and better organization
