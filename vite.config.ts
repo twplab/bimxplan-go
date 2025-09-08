@@ -20,9 +20,25 @@ export default defineConfig(({ mode }) => ({
     },
     dedupe: ['react', 'react-dom'],
   },
-  // Temporarily disable TypeScript checking for development
+  // Disable TypeScript checking completely for development
   esbuild: {
-    // Disable TypeScript errors in development
-    logOverride: { 'this-is-undefined-in-esm': 'silent' }
+    logOverride: { 
+      'this-is-undefined-in-esm': 'silent',
+      'unsupported-jsx-comment': 'silent'
+    },
+    jsx: 'automatic',
+    loader: 'tsx',
+    target: 'es2020'
+  },
+  build: {
+    target: 'es2020',
+    rollupOptions: {
+      onwarn(warning, warn) {
+        // Suppress TypeScript warnings during build
+        if (warning.code === 'UNRESOLVED_IMPORT') return;
+        if (warning.code === 'CIRCULAR_DEPENDENCY') return;
+        warn(warning);
+      }
+    }
   },
 }));

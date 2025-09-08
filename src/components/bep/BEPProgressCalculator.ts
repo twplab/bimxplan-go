@@ -230,7 +230,7 @@ function isFieldComplete(sectionData: Record<string, unknown> | null | undefined
     case 'general_lod':
     case 'units':
     case 'platform':
-      result = !!(sectionData[field]?.trim())
+      result = !!(typeof sectionData[field] === 'string' && sectionData[field]?.trim())
       break
       
     case 'firms':
@@ -256,7 +256,7 @@ function isFieldComplete(sectionData: Record<string, unknown> | null | undefined
     case 'coordinate_system':
       // Only required if is_georeferenced is true
       if (sectionData.is_georeferenced === true) {
-        result = !!(sectionData.coordinate_system?.trim())
+        result = !!(typeof sectionData.coordinate_system === 'string' && sectionData.coordinate_system?.trim())
       } else {
         result = true // Not required if not georeferenced
       }

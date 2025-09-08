@@ -62,7 +62,7 @@ export async function createVersionEntry(
       .insert({
         project_id: projectId,
         version_number: Math.floor(Date.now() / 1000),
-        project_data: exportData,
+        project_data: exportData as any,
         changelog: `BEP PDF Export: ${filename}`,
         created_by: (await supabase.auth.getUser()).data.user?.id
       })

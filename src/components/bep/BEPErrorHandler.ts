@@ -34,8 +34,8 @@ class BEPErrorHandler {
       message,
       context,
       timestamp: new Date().toISOString(),
-      projectId: context.projectId,
-      userId: context.userId
+      projectId: typeof context.projectId === 'string' ? context.projectId : undefined,
+      userId: typeof context.userId === 'string' ? context.userId : undefined
     }
 
     this.logs.push(entry)
@@ -144,16 +144,18 @@ class BEPErrorHandler {
     const recentErrors: BEPError[] = []
 
     recentErrorLogs.forEach(log => {
-      const code = log.context.code || 'UNKNOWN'
+      const code = typeof log.context.code === 'string' ? log.context.code : 'UNKNOWN'
       errorsByCode[code] = (errorsByCode[code] || 0) + 1
       
-      if (log.context.code) {
+      if (typeof log.context.code === 'string') {
         recentErrors.push({
           code: log.context.code,
           message: log.message,
           context: log.context,
           timestamp: log.timestamp,
-          severity: log.context.severity || 'medium'
+          severity: typeof log.context.severity === 'string' && 
+                   ['low', 'medium', 'high', 'critical'].includes(log.context.severity) ? 
+                   log.context.severity as 'low' | 'medium' | 'high' | 'critical' : 'medium'
         })
       }
     })
