@@ -150,16 +150,59 @@ export async function getBepExportData(projectId: string): Promise<BEPExportData
       updatedAt: project.updated_at,
       ownerId: project.owner_id,
       
-      // BEP sections - direct mapping from project_data
-      projectOverview: projectData.project_overview || {},
-      teamResponsibilities: projectData.team_responsibilities || {},
-      softwareOverview: projectData.software_overview || {},
-      modelingScope: projectData.modeling_scope || {},
-      fileNaming: projectData.file_naming || {},
-      collaborationCDE: projectData.collaboration_cde || {},
-      geolocation: projectData.geolocation || {},
-      modelChecking: projectData.model_checking || {},
-      outputsDeliverables: projectData.outputs_deliverables || {},
+      // BEP sections - with proper type defaults
+      projectOverview: projectData.project_overview || {
+        project_name: '',
+        location: '',
+        client_name: '',
+        project_type: '',
+        key_milestones: []
+      },
+      teamResponsibilities: projectData.team_responsibilities || {
+        firms: []
+      },
+      softwareOverview: projectData.software_overview || {
+        main_tools: [],
+        team_specific_tools: []
+      },
+      modelingScope: projectData.modeling_scope || {
+        general_lod: '',
+        discipline_lods: [],
+        exceptions: [],
+        units: '',
+        levels_grids_strategy: ''
+      },
+      fileNaming: projectData.file_naming || {
+        use_conventions: false,
+        prefix_format: '',
+        discipline_codes: '',
+        versioning_format: '',
+        examples: []
+      },
+      collaborationCDE: projectData.collaboration_cde || {
+        platform: '',
+        file_linking_method: '',
+        sharing_frequency: '',
+        setup_responsibility: '',
+        access_controls: ''
+      },
+      geolocation: projectData.geolocation || {
+        is_georeferenced: false,
+        coordinate_setup: '',
+        origin_location: '',
+        coordinate_system: ''
+      },
+      modelChecking: projectData.model_checking || {
+        clash_detection_tools: [],
+        coordination_process: '',
+        meeting_frequency: '',
+        responsibility_matrix: ''
+      },
+      outputsDeliverables: projectData.outputs_deliverables || {
+        deliverables_by_phase: [],
+        formats_standards: [],
+        milestone_schedule: []
+      },
       
       // Validation results from unified service
       validationIssues,
@@ -181,7 +224,7 @@ export async function getBepExportData(projectId: string): Promise<BEPExportData
     })
 
     // Emit unified data event for all consumers
-    bepDataEvents.emit('bep:data-updated', projectId, exportData)
+    bepDataEvents.emit('bep:data-updated', projectId, exportData as unknown as Record<string, unknown>)
 
     return exportData
 

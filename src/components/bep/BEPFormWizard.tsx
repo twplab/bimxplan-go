@@ -126,7 +126,7 @@ export function BEPFormWizard({ onClose, initialData = {}, onUpdate, projectId }
     } finally {
       setIsRehydrating(false)
     }
-  }, [projectId, logAction, updateValidationReport])
+  }, [projectId, logAction])
 
   // Enhanced validation function
   const validateCurrentStep = useCallback((stepId: string, stepData: Record<string, unknown>): StepValidation => {

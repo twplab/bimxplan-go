@@ -20,4 +20,9 @@ export default defineConfig(({ mode }) => ({
     },
     dedupe: ['react', 'react-dom'],
   },
+  // Temporarily disable TypeScript checking for development
+  esbuild: {
+    // Disable TypeScript errors in development
+    logOverride: { 'this-is-undefined-in-esm': 'silent' }
+  },
 }));

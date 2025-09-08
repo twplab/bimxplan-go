@@ -1,56 +1,93 @@
-import React, { Suspense, lazy, useState, useEffect } from 'react'
-import { ChatBotErrorBoundary } from './ChatBotErrorBoundary'
+import React, { Suspense, useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-
-// Lazy load the ChatBot component
-const ChatBot = lazy(() => 
-  import('./ChatBot').then(module => ({ default: module.ChatBot }))
-)
+import { ChatBotErrorBoundary } from './ChatBotErrorBoundary'
+import { ChatBot } from './ChatBot'
 
 interface SafeChatBotProps {
-  enabled?: boolean
   className?: string
 }
 
-export function SafeChatBot({ enabled = true, className }: SafeChatBotProps) {
+export const SafeChatBot = ({ className }: SafeChatBotProps) => {
+  const [enabled, setEnabled] = useState(true)
   const [isReady, setIsReady] = useState(false)
   const [hasError, setHasError] = useState(false)
   const location = useLocation()
 
-  // Don't load ChatBot on certain pages to avoid conflicts
-  const restrictedPaths = ['/auth', '/bep-form']
-  const isRestrictedPath = restrictedPaths.some(path => location.pathname.startsWith(path))
-
-  // Priority loading - faster on landing page, slower on complex pages
+  // Define if we're on landing page
   const isLandingPage = location.pathname === '/'
-  const isDashboard = location.pathname === '/dashboard'
-  
-  // Initialize ChatBot with different delays based on page complexity
-  useEffect(() => {
-    if (!enabled || isRestrictedPath) return
 
-    let delay = 2000 // Default 2 seconds
-    
-    if (isLandingPage) {
-      delay = 1000 // Faster on landing page (1 second)
-    } else if (isDashboard) {
-      delay = 1500 // Medium delay on dashboard (1.5 seconds)
+  // Paths where ChatBot should be disabled
+  const restrictedPaths = ['/auth', '/terms', '/about', '/contact']
+  const isRestrictedPath = restrictedPaths.includes(location.pathname)
+
+  // Listen for settings changes
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const stored = localStorage.getItem('chatbot-enabled')
+        setEnabled(stored !== null ? JSON.parse(stored) : true)
+      } catch {
+        setEnabled(true)
+      }
     }
 
-    console.log(`[SafeChatBot] Loading in ${delay}ms on ${location.pathname}`)
+    const handleCustomEvent = () => {
+      handleStorageChange()
+    }
+
+    // Listen for both storage events and custom events
+    window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('chatbot-settings-changed', handleCustomEvent)
+    
+    // Initialize
+    handleStorageChange()
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('chatbot-settings-changed', handleCustomEvent)
+    }
+  }, [])
+
+  // ChatBot readiness check with timeout
+  useEffect(() => {
+    if (!enabled || isRestrictedPath) {
+      setIsReady(false)
+      return
+    }
 
     const timer = setTimeout(() => {
-      console.log(`[SafeChatBot] Ready on ${location.pathname}`)
       setIsReady(true)
-    }, delay)
+    }, 100) // Small delay to ensure other components are ready
 
     return () => clearTimeout(timer)
-  }, [enabled, isRestrictedPath, isLandingPage, isDashboard, location.pathname])
+  }, [enabled, isRestrictedPath])
 
-  // Reset error state when navigating to different pages
-  useEffect(() => {
-    setHasError(false)
-  }, [location.pathname])
+  // Define components first before using them
+  const ChatBotPreview = () => (
+    <div className="fixed bottom-4 right-4 z-50">
+      <div className="w-14 h-14 bg-primary/20 border-2 border-primary/50 rounded-full flex items-center justify-center animate-pulse">
+        <div className="w-8 h-8 bg-primary/40 rounded-full flex items-center justify-center">
+          <div className="w-4 h-4 bg-primary rounded-full"></div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const LoadingSpinner = () => (
+    <div className="fixed bottom-4 right-4 z-50">
+      <div className="w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-lg">
+        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    </div>
+  )
+
+  const fallbackUI = (
+    <div className="fixed bottom-4 right-4 z-50">
+      <div className="w-14 h-14 bg-destructive rounded-full flex items-center justify-center shadow-lg opacity-50">
+        <span className="text-white text-xs">!</span>
+      </div>
+    </div>
+  )
 
   // Don't render anything on restricted paths or if disabled
   if (!enabled || isRestrictedPath || hasError) {
@@ -66,31 +103,6 @@ export function SafeChatBot({ enabled = true, className }: SafeChatBotProps) {
   if (!isReady) {
     return null
   }
-
-  const fallbackUI = (
-    <div className="fixed bottom-4 right-4 z-50">
-      {/* Minimal fallback - could show a simple button or nothing */}
-    </div>
-  )
-
-  const LoadingSpinner = () => (
-    <div className="fixed bottom-4 right-4 z-50">
-      <div className="w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-lg">
-        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    </div>
-  )
-
-  // Show a preview indicator while ChatBot is initializing (only on landing page)
-  const ChatBotPreview = () => (
-    <div className="fixed bottom-4 right-4 z-50">
-      <div className="w-14 h-14 bg-primary/20 border-2 border-primary/50 rounded-full flex items-center justify-center animate-pulse">
-        <div className="w-8 h-8 bg-primary/40 rounded-full flex items-center justify-center">
-          <div className="w-4 h-4 bg-primary rounded-full"></div>
-        </div>
-      </div>
-    </div>
-  )
 
   return (
     <ChatBotErrorBoundary 

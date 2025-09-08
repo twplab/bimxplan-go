@@ -217,8 +217,8 @@ export function AppDiagnostics() {
     // Enhanced Performance Tests
     try {
       const navigationTiming = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming
-      const loadTime = navigationTiming.loadEventEnd - navigationTiming.navigationStart
-      const domLoadTime = navigationTiming.domContentLoadedEventEnd - navigationTiming.navigationStart
+      const loadTime = navigationTiming.loadEventEnd - navigationTiming.startTime
+      const domLoadTime = navigationTiming.domContentLoadedEventEnd - navigationTiming.startTime
       const firstPaint = performance.getEntriesByType('paint').find(entry => entry.name === 'first-paint')?.startTime || 0
       
       testResults.push({
